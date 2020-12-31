@@ -1,0 +1,534 @@
+---
+title: "SequenceRecovery"
+author: '470414095'
+date: "09/11/2020"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(PhosR)
+library(directPA)
+removeSiteLoc = function(arr) {
+        return(sapply(strsplit(arr,";"), function(x) paste(x[1],gsub('[A-Za-z]*','',x[2]),"", sep=";")))
+}
+```
+
+
+```{r}
+target = '../Data-Populated-Unfiltered/Multi/'
+target_save = '../Data-Populated-Unfiltered/Sites/'
+class_columns <- c('y.MAPK1', 'y.MTOR')
+folds = c('F1','F2','F3','F5','F5')
+```
+
+
+## ESC 
+
+```{r}
+load(file="../Datasets/phospho_ESC_ratio.RData")
+dat_raw <- phospho.ESC.ratio
+
+
+ids <- sapply(strsplit(gsub("_\\d", "", rownames(dat_raw)), "~"), function(x)paste(toupper(x[2]), x[3], x[4], "", sep=";"))
+cols <- colnames(dat_raw)
+
+## Reduce data from peptide level to phosphosite level
+dat <- phosCollapse(mat=dat_raw, id=ids, stat=apply(abs(dat_raw), 1, max), by="max")
+
+dat.DE <- dat
+
+## Normalisation 0-1
+dat <- (dat.DE - min(dat.DE))/(max(dat.DE) - min(dat.DE))
+
+ids = rownames(dat)
+# gene;site;
+sites <- sapply(strsplit(rownames(dat), ";"), function(x)paste(x[1], x[2], "", sep=";"))
+sequences <- sapply(strsplit(ids, ";"), function(x)x[3])
+
+# Remove alphabet from site compoennt
+site_label = sapply(strsplit(sites, ";"), function(x) paste(x[1],";",gsub("[A-Za-z]","",x[2]),";", sep=""))
+df <- data.frame(site=site_label, site_id=ids, dat)
+## Remove observations with unknown gene
+df <- df[!grepl("^NA;",rownames(df)),]
+
+data_fp = 'ESC_MAPK1_FLD.csv'
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh1')
+}
+
+data_fp = 'ESC_MTOR_FLD.csv'
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh2')
+}
+```
+
+## L6
+
+```{r}
+load("../Datasets/phospho_L6_ratio.RData") 
+dat_raw <- phospho.L6.ratio
+
+cols <- colnames(dat_raw)
+groups <- gsub('.*_', '',gsub("\\..+", "", cols))
+dat.DE <- dat_raw
+##z-score standardisation
+dat <- (dat.DE - min(dat.DE))/(max(dat.DE) - min(dat.DE))
+dim(dat)
+
+# Rownames : gene;site;amino acid sequence
+ids <- sapply(strsplit(gsub("_\\d", "", rownames(dat)), "~"), function(x)paste(toupper(x[2]), x[3], x[4], "", sep=";"))
+## Amino Acid Sites - where Phosphorylation occurs
+sites <- sapply(strsplit(ids, ";"), function(x)paste(x[1], x[2], "", sep=";"))
+sequences <- sapply(strsplit(ids, ";"), function(x)x[3])
+
+# Remove alphabet from site component
+site_label = sapply(strsplit(sites, ";"), function(x) paste(x[1],";",gsub("[A-Za-z]","",x[2]),";", sep=""))
+df <- data.frame(site=site_label, site_id=ids, dat)
+## Remove observations with unknown gene
+df <- df[!grepl("^NA;",rownames(df)),]
+
+cls = 'L6'
+data_fp = paste(cls,'_MAPK1_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh1')
+}
+
+data_fp = paste(cls,'_MTOR_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh2')
+}
+```
+
+# NBC 
+```{r}
+load("../Datasets/phospho_NB_cells_Ins_ratios.RData")
+dat_raw <- phospho.NB.cells.Ins.ratios
+
+# Rownames : gene;site;amino acid sequence
+ids <- sapply(strsplit(gsub("_\\d", "", rownames(dat_raw)), "~"), function(x)paste(toupper(x[2]), x[3], x[4], "", sep=";"))
+cols <- colnames(dat_raw)
+
+dat <- dat_raw[!grepl("^NA;",ids),]
+dat.DE <- dat
+
+## Normalisation 0-1
+dat <- (dat.DE - min(dat.DE))/(max(dat.DE) - min(dat.DE))
+
+ids <- sapply(strsplit(gsub("_\\d", "", rownames(dat)), "~"), function(x)paste(toupper(x[2]), x[3], x[4], "", sep=";"))
+rownames(dat) <- ids
+# gene;site;
+sites <- sapply(strsplit(ids, ";"), function(x)paste(x[1], x[2], "", sep=";"))
+sequences <- sapply(strsplit(ids, ";"), function(x)x[3])
+
+# Remove alphabet from site compoennt
+site_label = sapply(strsplit(sites, ";"), function(x) paste(x[1],";",gsub("[A-Za-z]","",x[2]),";", sep=""))
+df <- data.frame(site=site_label, site_id=ids,dat)
+## Remove observations with unknown gene
+df <- df[!grepl("^NA;",rownames(df)),]
+
+cls = 'NBC'
+data_fp = paste(cls,'_MAPK1_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh1')
+}
+
+data_fp = paste(cls,'_MTOR_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh2')
+}
+```
+
+
+
+# MLC
+```{r}
+load("../Datasets/phospho_mice_liver_Ins_TC_ratio.RData") # Unnormalised
+load("../Datasets/phospho_liverInsTC_RUV.RData") 
+
+dat_raw <- phospho.liver.Ins.TC.ratio.RUV
+rownames(dat_raw) <- paste(gsub('~',';',rownames(dat_raw)),';', sep='')
+colnames(dat_raw) <- sapply(strsplit(colnames(dat_raw), '_'), function(x) paste(paste('X',x[3], sep=''),gsub('Bio','',x[4]), sep='_'))
+
+cols <- colnames(dat_raw)
+
+dat.DE <- dat_raw
+
+dat <- (dat.DE - min(dat.DE))/(max(dat.DE) - min(dat.DE))
+dat <- as.data.frame(dat)  %>%
+ mutate(site= rownames(dat))
+dat <- dat[!grepl('^NA;', rownames(dat)),]
+
+tmp <- phospho.mice.liver.Ins.TC.ratio
+# Rownames : gene;site;amino acid sequence
+ids <- sapply(strsplit(gsub("_\\d", "", rownames(tmp)), "~"), function(x)paste(toupper(x[2]), x[3], x[4], "", sep=";"))
+rownames(tmp) = ids
+## Amino Acid Sites - where Phosphorylation occurs
+sites <- sapply(strsplit(rownames(tmp), ";"), function(x)paste(x[1], x[2], "", sep=";"))
+sequences <- sapply(strsplit(rownames(tmp), ";"), function(x)x[3])
+
+
+# Data index of known labels
+MAPK1.ids <- which(sites %in% PhosR::PhosphoSite.mouse$MAPK1) 
+MTOR.ids <- which(sites %in% PhosR::PhosphoSite.mouse$MTOR)
+
+## Class Labels
+y.MAPK1 <- rep(0, length(sites))
+y.MTOR <- rep(0, length(sites))
+
+## Assign known sites
+y.MAPK1[MAPK1.ids] <- 1
+y.MTOR[MTOR.ids] <- 1
+
+classes <- cbind(y.MAPK1, y.MTOR)
+
+## Retrieve Motif scores
+MAPK1_motif <- frequencyScoring(sequences, createFrequencyMat(sequences[MAPK1.ids]))
+MTOR_motif <- frequencyScoring(sequences, createFrequencyMat(sequences[MTOR.ids]))
+# Empirical Motif Score
+motif_score <- cbind(MAPK1_motif, MTOR_motif)
+
+scores <- data.frame(site=sites, site_id=ids, motif_score, classes) %>%
+    mutate(site=sapply(strsplit(as.character(site),';'), function(x) paste(x[1], gsub('[A-Z]*','',x[2]), '',sep=';'))) %>%
+    filter(!grepl('^NA;', site))
+
+df <- inner_join(dat, as.data.frame(scores), by= 'site')
+
+cls = 'MLC'
+data_fp = paste(cls,'_MAPK1_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh1')
+}
+
+data_fp = paste(cls,'_MTOR_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh2')
+}
+```
+
+# C2C12 
+
+```{r}
+load(file="../Datasets/C2C12.diff.phos_v2.RData")
+dat_raw <- phospho.pnorm
+
+dat.DE <- dat_raw
+
+## Normalisation 0-1
+dat <- (dat.DE - min(dat.DE))/(max(dat.DE) - min(dat.DE))
+dim(dat)
+
+ids <- rownames(dat)
+# gene;site;
+sites <- sapply(strsplit(rownames(dat), ";"), function(x)paste(x[1], x[2], "", sep=";"))
+sequences <- sapply(strsplit(ids, ";"), function(x)x[3])
+
+site_label = sapply(strsplit(sites, ";"), function(x) paste(x[1],";",gsub("[A-Za-z]","",x[2]),";", sep=""))
+df <- data.frame(site=site_label, site_id=ids, dat)
+## Remove observations with unknown gene
+df <- df[!grepl("^NA;",rownames(df)),]
+
+cls = 'C2C12'
+data_fp = paste(cls,'_MAPK1_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh1')
+}
+
+data_fp = paste(cls,'_MTOR_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh2')
+}
+```
+
+# L1-F
+
+```{r}
+load("../Datasets/phospho_L1_FGF21_ratio_v2.RData") 
+dat_raw <- phospho.L1.FGF21.ratio
+
+rownames(dat_raw)[grepl(';', rownames(dat_raw))] = sapply(strsplit(rownames(dat_raw)[grepl(';', rownames(dat_raw))], ';'), function(x) paste(x[1], strsplit(x[2], '~')[[1]][2], sep='~'))
+cols <- colnames(dat_raw)
+groups <- gsub('.*_', '',gsub("\\..+", "", cols))
+ids <- sapply(strsplit(gsub("_\\d", "", rownames(dat_raw)), "~"), function(x)paste(toupper(x[2]), x[3], x[4], "", sep=";"))
+
+dat.DE <- dat_raw
+dat <- (dat.DE - min(dat.DE))/(max(dat.DE) - min(dat.DE))
+
+ids <- sapply(strsplit(gsub("_\\d", "", rownames(dat)), "~"), function(x)paste(toupper(x[2]), x[3], x[4], "", sep=";"))
+rownames(dat) = ids
+sites <- sapply(strsplit(rownames(dat), ";"), function(x)paste(x[1], x[2], "", sep=";"))
+sequences <- sapply(strsplit(ids, ";"), function(x)x[3])
+
+site_label = sapply(strsplit(sites, ";"), function(x) paste(x[1],";",gsub("[A-Za-z]","",x[2]),";", sep=""))
+df <- data.frame(site=site_label, site_id=ids,dat)
+## Remove observations with unknown gene
+df <- df[!grepl("^NA;",rownames(df)),]
+
+cls = 'L1-F'
+data_fp = paste(cls,'_MAPK1_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh1')
+}
+
+data_fp = paste(cls,'_MTOR_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh2')
+}
+```
+
+# L1-I
+
+```{r}
+load("../Datasets/phospho_L1_Ins_ratio.RData") 
+dat_raw <- phospho.L1.Ins.ratio
+
+
+cols <- colnames(dat_raw)
+groups <- gsub('.*_', '',gsub("\\..+", "", cols))
+
+# Rownames : gene;site;amino acid sequence
+ids <- sapply(strsplit(gsub("_\\d","", rownames(dat_raw)), ";"), function(x) 
+        paste(toupper(x[1]), toupper(x[2]), toupper(x[3]), "", sep=";"))
+
+# filtering
+dat.DE <- dat_raw
+
+# normalisation
+dat <- (dat.DE - min(dat.DE))/(max(dat.DE) - min(dat.DE))
+
+# gene;site;
+sites <- sapply(strsplit(rownames(dat), ";"), function(x)paste(x[1], x[2], "", sep=";"))
+sequences <- sapply(strsplit(ids, ";"), function(x)x[3])
+
+# Remove alphabet from site compoennt
+site_label = sapply(strsplit(sites, ";"), function(x) paste(x[1],";",gsub("[A-Za-z]","",x[2]),";", sep=""))
+
+df <- data.frame(site=site_label, site_id=ids,dat)
+## Remove observations with unknown gene
+df <- df[!grepl("^NA;",rownames(df)),]
+
+cls = 'L1-I'
+data_fp = paste(cls,'_MAPK1_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+# if (sum(which(tmp$site != df$site)) > 0) {
+#     stop('Uh1')
+# }
+
+data_fp = paste(cls,'_MTOR_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+# if (sum(which(tmp$site != df$site)) > 0) {
+#     stop('Uh2')
+# }
+```
+
+```{r}
+load("../Datasets/phospho_L1_redox.RData") 
+dat_raw <- phospho.L1.redox
+
+cols <- colnames(dat_raw)
+groups <- gsub('.*_', '',gsub("\\..+", "", cols))
+rownames(dat_raw) <- paste(gsub('~', ';',rownames(dat_raw)), ';', sep='')
+
+# Rownames : gene;site;amino acid sequence
+ids <- sapply(strsplit(gsub("_\\d","", rownames(dat_raw)), ";"), function(x) 
+        paste(toupper(x[2]), toupper(x[3]), toupper(x[4]), "", sep=";"))
+
+# filtering
+dat.DE <- dat_raw
+
+# normalisation
+dat <- (dat.DE - min(dat.DE))/(max(dat.DE) - min(dat.DE))
+
+rownames(dat) = ids
+# gene;site;
+sites <- sapply(strsplit(rownames(dat), ";"), function(x)paste(x[1], x[2], "", sep=";"))
+sequences <- sapply(strsplit(ids, ";"), function(x)x[3])
+# Remove alphabet from site compoennt
+site_label = sapply(strsplit(sites, ";"), function(x) paste(x[1],";",gsub("[A-Za-z]","",x[2]),";", sep=""))
+
+df <- data.frame(site=site_label, site_id=ids,dat)
+## Remove observations with unknown gene
+df <- df[!grepl("^NA;",rownames(df)),]
+
+cls = 'L1-R'
+data_fp = paste(cls,'_MAPK1_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh1')
+}
+
+data_fp = paste(cls,'_MTOR_FLD.csv', sep='')
+tmp = read.csv(paste(target, data_fp,sep=''))
+tmp_out =  cbind(id=df$site_id,
+      tmp %>%
+    select(c('site',folds)))
+
+write.csv(tmp_out,
+          file=paste(target_save,data_fp,sep=''),
+          row.names=FALSE)
+
+if (sum(which(tmp$site != df$site)) > 0) {
+    stop('Uh2')
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

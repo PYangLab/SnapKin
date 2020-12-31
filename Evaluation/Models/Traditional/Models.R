@@ -1,0 +1,5 @@
+source('./Models/KNN.R')
+source('./Models/NB.R')
+source('./Models/RF.R')
+source('./Models/SVM.R')
+source('./Models/XG.R')

@@ -1,0 +1,95 @@
+---
+title: "Ensemble deep learning for KSP"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## load datasets
+```{r}
+# setwd("/Users/pengyi/Dropbox (Sydney Uni)/Research/Trans-Regulatory Group/Honours/2020/Project_deepKSP/Results")
+# load("/Users/pengyi/Dropbox (Sydney Uni)/Research/Trans-Regulatory Group/Honours/2020/Project_deepKSP/Results/Results_18Nov.RData")
+load('Results-Folds-50.RData')
+
+library(ggplot2)
+library(dplyr)
+# plot for MAPK1
+
+# filter some methods
+df_foldsets.filt <- df_foldsets
+
+tmp <- split(df_foldsets.filt, paste(df_foldsets.filt$Model, df_foldsets.filt$Dataset, df_foldsets.filt$Class, df_foldsets.filt$Ensemble, df_foldsets.filt$Pseudo, sep="_"))
+ms <- t(sapply(tmp, function(x){colMeans(x[,5:6])}))
+sds <- t(sapply(tmp, function(x){apply(x[,5:6], 2, sd)}))
+info <- do.call(rbind, strsplit(rownames(ms), "_"))
+df <- data.frame(Model=info[,1], Dataset=info[,2], Class=info[,3], Condition=paste(info[,4], info[,5], sep="_"), m=ms, sd=sds)
+df$Model <- factor(df$Model, levels=c("SnapKin", "DNN", "KNN", "XG", "RF", "SVM", "LR", "NB"))
+
+### Pseudo vs noPseudo
+df2 <- df[df[,"Condition"] %in% c("Individual_No Pseudo", "Individual_Pseudo"), ]
+
+# ROC
+ggplot(df2, aes(Dataset, m.ROC_AUC, color=Condition)) + 
+geom_pointrange(aes(ymin=m.ROC_AUC-sd.ROC_AUC, ymax=m.ROC_AUC+sd.ROC_AUC)) + facet_grid(Class ~ Model) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggplot(df2, aes(Dataset, m.PR_AUC, color=Condition)) + 
+geom_pointrange(aes(ymin=m.PR_AUC-sd.PR_AUC, ymax=m.PR_AUC+sd.PR_AUC)) + facet_grid(Class ~ Model) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+### Ensemble+Pseudo vs Ensemble+NoPseudo
+df2.5 <- df[df[,"Condition"] %in% c("Ensemble_No Pseudo", "Ensemble_Pseudo"), ]
+
+ggplot(df2.5, aes(Dataset, m.ROC_AUC, color=Condition)) + 
+geom_pointrange(aes(ymin=m.ROC_AUC-sd.ROC_AUC, ymax=m.ROC_AUC+sd.ROC_AUC)) + facet_grid(Class ~ Model) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+### Ensemble vs noEnsemble
+df3 <- df[df[,"Condition"] %in% c("Individual_No Pseudo", "Ensemble_No Pseudo"), ]
+
+# ROC
+ggplot(df3, aes(Dataset, m.ROC_AUC, color=Condition)) + 
+geom_pointrange(aes(ymin=m.ROC_AUC-sd.ROC_AUC, ymax=m.ROC_AUC+sd.ROC_AUC)) + facet_grid(Model ~ Class) + coord_flip()
+# PR
+ggplot(df3, aes(Dataset, m.PR_AUC, color=Condition)) + 
+geom_pointrange(aes(ymin=m.PR_AUC-sd.PR_AUC, ymax=m.PR_AUC+sd.PR_AUC)) + facet_grid(Model ~ Class) + coord_flip()
+
+
+
+### synegistic of both
+df4 <- df[df[,"Condition"] %in% c("Individual_Pseudo", "Ensemble_Pseudo"), ]
+
+# ROC
+ggplot(df4, aes(Dataset, m.ROC_AUC, color=Condition)) + 
+geom_pointrange(aes(ymin=m.ROC_AUC-sd.ROC_AUC, ymax=m.ROC_AUC+sd.ROC_AUC)) + facet_grid(Class ~ Model)  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# PR
+ggplot(df4, aes(Dataset, m.PR_AUC, color=Condition)) + 
+geom_pointrange(aes(ymin=m.PR_AUC-sd.PR_AUC, ymax=m.PR_AUC+sd.PR_AUC)) + facet_grid(Class ~ Model)  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+### Comparing best models
+df %>% filter(Condition == "Ensemble_Pseudo") %>% ggplot() + aes(Dataset, m.ROC_AUC, col=Model) + geom_pointrange(aes(ymin=m.ROC_AUC-sd.ROC_AUC, ymax=m.ROC_AUC+sd.ROC_AUC)) + facet_grid(~Class) + coord_flip()
+
+df %>% filter(Condition == "Ensemble_Pseudo") %>% ggplot() + aes(Dataset, m.PR_AUC, col=Model) + geom_pointrange(aes(ymin=m.PR_AUC-sd.PR_AUC, ymax=m.PR_AUC+sd.PR_AUC)) + facet_grid(~Class) + coord_flip()
+```
+
+```{r}
+df5 <- df[df[,"Condition"] == "Ensemble_Pseudo",]
+rownames(df5) <- 1:nrow(df5)
+tmp <- split(df5, paste(df5$Dataset, df5$Class, sep="_"))
+Rank <- unlist(lapply(tmp, function(x){rank(x[,5])}))
+df6 <- data.frame(df5, Rank)
+
+tt <- do.call(rbind, lapply(tmp, function(x){rank(x[,"m.ROC_AUC"])}))
+ROC1 <- tt[grep("MAPK1", rownames(tt)),]
+ROC2 <- tt[grep("MTOR", rownames(tt)),]
+barplot(colMeans(ROC1))
+barplot(colMeans(ROC2))
+
+tt <- do.call(rbind, lapply(tmp, function(x){rank(x[,"m.PR_AUC"])}))
+PR1 <- tt[grep("MAPK1", rownames(tt)),]
+PR2 <- tt[grep("MTOR", rownames(tt)),]
+barplot(colMeans(PR1))
+barplot(colMeans(PR2))
+
+
+```

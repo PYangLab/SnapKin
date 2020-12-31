@@ -1,0 +1,5 @@
+source('./KNN.R')
+source('./NB.R')
+source('./RF.R')
+source('./SVM.R')
+source('./XG.R')

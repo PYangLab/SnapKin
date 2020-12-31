@@ -1,0 +1,114 @@
+---
+title: "Plotting"
+output: html_document
+---
+
+```{r}
+# Packages
+source('../Helpers/Measures.R')
+library(MESS)
+library(pROC)
+library(PRROC)
+library(kableExtra)
+library(tidyverse)
+options(dplyr.summarise.inform = FALSE)
+select = dplyr::select
+slice = dplyr::slice
+```
+
+```{r}
+load('./Results-New-1.RData')
+```
+
+```{r}
+## Averaged ROC and PR
+df_all = df_foldsets %>%
+  group_by(Model,Dataset,Class,Ensemble,Pseudo) %>%
+  summarise(ROC_AUC=mean(ROC_AUC),
+            PR_AUC=mean(PR_AUC))
+```
+
+```{r}
+df_all %>%
+    group_by(Class, Ensemble, Dataset, Model) %>%
+    rename(AUC=ROC_AUC) %>%
+    filter(AUC == max(AUC)) %>%
+    ungroup() %>%
+    group_by(Class, Ensemble,Pseudo, Model) %>%
+    summarise(Count=n()) %>%
+    pivot_wider(names_from=Pseudo, values_from=Count) %>%
+    # For ties, 'Pseudo' is just as good
+    mutate(`No Pseudo`=ifelse(is.na(`No Pseudo`),0,`No Pseudo`),
+           Pseudo=ifelse(is.na(Pseudo),0,Pseudo),
+           Ties=Pseudo+`No Pseudo` - 8,
+           `No Pseudo`=`No Pseudo`-Ties) %>%
+    ungroup() %>%
+    select(-Ties) %>%
+    pivot_longer(cols=c(`No Pseudo`, Pseudo), names_to='Category', values_to='Frequency') %>%
+    ggplot() + aes(x=Model,y=Frequency, fill=Category) +
+    geom_col() + facet_grid(Ensemble ~ Class) +
+    coord_flip() +
+    labs(x='Model',title='Freq. of pseudo outperforming no pseudo (ROC-AUC)') +
+    theme(strip.text = element_text(face="bold", size=16),
+          axis.text.x = element_text(size=16, face='bold'),
+          axis.text.y = element_text(size=16, face='bold'),
+          axis.title.x = element_text(size=16, face='bold'),
+          axis.title.y = element_text(size=16, face='bold'),
+          plot.title = element_text(size=16, face='bold'),
+          legend.text = element_text(size=16, face='bold'),
+          legend.title = element_text(size=16, face='bold'))
+
+df_all %>%
+    group_by(Class, Ensemble, Dataset, Model) %>%
+    rename(AUC=PR_AUC) %>%
+    filter(AUC == max(AUC)) %>%
+    ungroup() %>%
+    group_by(Class, Ensemble,Pseudo, Model) %>%
+    summarise(Count=n()) %>%
+    pivot_wider(names_from=Pseudo, values_from=Count) %>%
+    # For ties, 'Pseudo' is just as good
+    mutate(`No Pseudo`=ifelse(is.na(`No Pseudo`),0,`No Pseudo`),
+           Pseudo=ifelse(is.na(Pseudo),0,Pseudo),
+           Ties=Pseudo+`No Pseudo` - 8,
+           `No Pseudo`=`No Pseudo`-Ties) %>%
+    ungroup() %>%
+    select(-Ties) %>%
+    pivot_longer(cols=c(`No Pseudo`, Pseudo), names_to='Category', values_to='Frequency') %>%
+    ggplot() + aes(x=Model,y=Frequency, fill=Category) +
+    geom_col() + facet_grid(Ensemble ~ Class) +
+    coord_flip() +
+    labs(x='Model',title='Freq. of pseudo outperforming no pseudo (PR-AUC)') +
+    theme(strip.text = element_text(face="bold", size=16),
+          axis.text.x = element_text(size=16, face='bold'),
+          axis.text.y = element_text(size=16, face='bold'),
+          axis.title.x = element_text(size=16, face='bold'),
+          axis.title.y = element_text(size=16, face='bold'),
+          plot.title = element_text(size=16, face='bold'),
+          legend.text = element_text(size=16, face='bold'),
+          legend.title = element_text(size=16, face='bold'))
+    
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

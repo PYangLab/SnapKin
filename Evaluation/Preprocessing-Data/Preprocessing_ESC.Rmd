@@ -1,0 +1,119 @@
+---
+output: html_document
+---
+# Packages
+```{r}
+library(tidyverse)
+library(PhosR)
+library(directPA)
+data(PhosphoSite)
+```
+
+# Load Raw Data
+```{r}
+filtering = FALSE
+load(file="../Datasets/phospho_ESC_ratio.RData")
+dat_raw <- phospho.ESC.ratio
+# save_fp <- "../Data-Populated/Data/ESC.RData"
+# save_csv<- "../Data-Populated/Data/ESC.csv"
+save_fp <- "../Data-Populated-Unfiltered/Data/ESC.RData"
+save_csv<- "../Data-Populated-Unfiltered/Data/ESC.csv"
+class_columns <- c('y.MAPK1', 'y.MTOR')
+```
+
+# Labels
+```{r}
+# Rownames : gene;site;amino acid sequence
+ids <- sapply(strsplit(gsub("_\\d", "", rownames(dat_raw)), "~"), function(x)paste(toupper(x[2]), x[3], x[4], "", sep=";"))
+cols <- colnames(dat_raw)
+groups <- gsub("_.+", "", cols)
+```
+
+# Preprocessing
+```{r}
+## Reduce data from peptide level to phosphosite level
+dat <- phosCollapse(mat=dat_raw, id=ids, stat=apply(abs(dat_raw), 1, max), by="max")
+
+if (filtering) {
+ ## Row wise ANOVA p-values
+ padj <- matANOVA(dat, grps=groups)
+ ## Filter data for relevant phosphosites
+ dat.DE <- dat[which(rowSums(abs(meanAbundance(dat, groups)) > 2) > 0 & padj < 0.05),]
+} else {
+ dat.DE <- dat
+}
+ 
+## Normalisation 0-1
+dat <- (dat.DE - min(dat.DE))/(max(dat.DE) - min(dat.DE))
+dim(dat)
+```
+
+```{r}
+ids = rownames(dat)
+# gene;site;
+sites <- sapply(strsplit(rownames(dat), ";"), function(x)paste(x[1], x[2], "", sep=";"))
+sequences <- sapply(strsplit(ids, ";"), function(x)x[3])
+```
+
+# Kinase Labels
+```{r}
+# data index of known labels
+MAPK1.ids <- which(sites %in% PhosR::PhosphoSite.mouse$MAPK1) 
+MTOR.ids <- which(sites %in% PhosR::PhosphoSite.mouse$MTOR)
+
+## Class Labels
+y.MAPK1 <- rep(0, length(sites))
+y.MTOR <- rep(0, length(sites))
+
+## Assign known sites
+y.MAPK1[MAPK1.ids] <- 1
+y.MTOR[MTOR.ids] <- 1
+
+classes <- cbind(y.MAPK1, y.MTOR)
+
+c(length(MAPK1.ids), length(MTOR.ids))
+```
+
+# Motif Scores
+```{r}
+## Retrieve Motif scores
+MAPK1_motif_raw <- frequencyScoring(sequences, createFrequencyMat(sequences[MAPK1.ids]))
+MTOR_motif_raw <- frequencyScoring(sequences, createFrequencyMat(sequences[MTOR.ids]))
+## Normalisation 0-1
+MAPK1_motif <- (MAPK1_motif_raw - min(MAPK1_motif_raw))/(max(MAPK1_motif_raw) - min(MAPK1_motif_raw))
+MTOR_motif <- (MTOR_motif_raw - min(MTOR_motif_raw))/(max(MTOR_motif_raw) - min(MTOR_motif_raw))
+# Empirical Motif Score
+motif_score <- cbind(MAPK1_motif, MTOR_motif)
+```
+
+# Combine dataset
+```{r}
+# Remove alphabet from site compoennt
+site_label = sapply(strsplit(sites, ";"), function(x) paste(x[1],";",gsub("[A-Za-z]","",x[2]),";", sep=""))
+df <- data.frame(site=site_label, dat, motif_score, classes)
+## Remove observations with unknown gene
+df <- df[!grepl("^NA;",rownames(df)),]
+dim(df)
+```
+
+# Save Dataset
+```{r}
+save(df,
+     class_columns,
+     file=save_fp)
+```
+
+```{r}
+write.csv(df,
+          file=save_csv,
+          row.names=FALSE)
+```
+
+```{r}
+df %>%
+    select(class_columns) %>%
+    summarise(y.MTOR = sum(y.MTOR), 
+              y.MAPK1 = sum(y.MAPK1))
+```
+
+

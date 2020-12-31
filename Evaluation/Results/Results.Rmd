@@ -1,0 +1,1793 @@
+---
+title: "Results"
+output: html_document
+---
+
+```{r include=FALSE }
+# Packages
+library(MESS)
+library(pROC)
+library(PRROC)
+library(kableExtra)
+library(tidyverse)
+library(grid)
+library(gridExtra)
+options(dplyr.summarise.inform = FALSE)
+select = dplyr::select
+slice = dplyr::slice
+```
+
+# Parameters
+```{r}
+data_file = './Results-Paper.RData'
+models = c('KNN','SVM', 'RF','NB','XG','LR')
+dl = c('DNN', 'SnapKin')
+filtered = 'Unfiltered'  
+save_plot = FALSE
+load(data_file)
+```
+
+```{r}
+df_auc %>%
+  pull(model) %>%
+  unique()
+```
+
+
+```{r include=FALSE}
+dl_choice = 'SnapKin'
+other = 'DNN'
+# Preprocessing
+ds1 = c('C2C12', 'ESC', 'MLC', 'NBC')
+
+if (filtered == 'Filtered') {
+    datasets = c('C2C12', 'ESC', 'MLC', 'NBC', 'L1-F', 'L6')
+    ds2 = c('L1-F', 'L6')
+} else {
+    datasets = c('C2C12', 'ESC', 'MLC', 'NBC', 'L1-I', 'L1-F', 'L1-R', 'L6')
+    ds2 = c('L1-I', 'L1-F', 'L1-R', 'L6')
+}
+md1 = c('NB','SVM','RF','LR')
+md2 = c('XG','KNN','DNN','SS')
+
+# Renaming and additional columns
+df_all = df_auc %>%
+  filter(LabelType==filtered)%>%
+  mutate(model=ifelse(model=='DNN-Snapshot-Iteration', 'SS', model),
+         model=ifelse(model=='DNN-Normless', 'DNN', model),
+         Ensemble=ifelse(Ensemble,'Ensemble','Individual')) %>%
+    filter(model != 'DNN-Snapshot') %>%
+  filter(dataset %in% datasets) %>%
+  select(auc, auc_pr, model, class, dataset, Pseudo, Ensemble, LabelType) %>%
+  group_by(dataset, class, Pseudo, Ensemble) %>%
+  mutate(Rank=rank(-auc, ties.method='min'),
+         Size=rank(auc, ties.method='max'),
+         Performance=ifelse(auc==max(auc), 'Best', 'Not Best'),
+         Label=ifelse(auc==max(auc),model,''),
+         Performance_pr=ifelse(auc_pr==max(auc_pr), 'Best', 'Not Best'),
+         Rank_pr=rank(-auc_pr, ties.method='min'),
+         Label_pr=ifelse(auc_pr==max(auc_pr),model,'')) %>%
+    ungroup() %>%
+    mutate(model=factor(model,levels=c('NB','SVM','RF','LR','XG','KNN','DNN','SS','DNN-Batch-Snap','Snapshot'))) 
+
+header <- tableGrob(mtcars[1, 1:2], rows=NULL, cols=c("head1", "head2")) 
+
+```
+
+# 1 - Pseudo-Positives
+
+## Frequency Visual
+```{r}
+df_all %>%
+    group_by(dataset, class, model, Ensemble) %>%
+    filter(auc==max(auc)) %>%
+    ungroup() %>%
+    group_by(class,model,Ensemble,Pseudo) %>%
+    summarise(Count=n()) %>%
+    arrange(class, Ensemble) %>%
+    pivot_wider(names_from=Pseudo, values_from=Count) %>%
+    mutate(`No Pseudo`=ifelse(is.na(`No Pseudo`),0,`No Pseudo`),
+           Tied=(`No Pseudo` + Pseudo) - length(datasets),
+           Pseudo=Pseudo - Tied,
+           `No Pseudo`= `No Pseudo` - Tied,
+           Pseudo=Pseudo+Tied) %>%
+    ungroup() %>%  
+    select(-Tied) %>%
+    pivot_longer(cols=c(`No Pseudo`, Pseudo), names_to='Category', values_to='Frequency') %>%
+    ggplot() + aes(x=model,y=Frequency, fill=Category) +
+    geom_col() + facet_grid(Ensemble ~ class) +
+    coord_flip() +
+    labs(x='Model',title='Freq. of pseudo outperforming no pseudo (ROC-AUC)') +
+    theme(strip.text = element_text(face="bold", size=16),
+          axis.text.x = element_text(size=16, face='bold'),
+          axis.text.y = element_text(size=16, face='bold'),
+          axis.title.x = element_text(size=16, face='bold'),
+          axis.title.y = element_text(size=16, face='bold'),
+          plot.title = element_text(size=16, face='bold'),
+          legend.text = element_text(size=16, face='bold'),
+          legend.title = element_text(size=16, face='bold'))
+
+if (save_plot) {
+  ggsave(filename='./Figs/1.1-ProportionPseudo-ROC.pdf',
+     plot=last_plot())
+  ggsave(filename='./Figs/1.1-ProportionPseudo-ROC.png',
+       plot=last_plot())
+}
+```
+
+```{r}
+df_all %>%
+    group_by(dataset, class, model, Ensemble) %>%
+    filter(auc_pr==max(auc_pr)) %>%
+    ungroup() %>%
+    group_by(class,model,Ensemble,Pseudo) %>%
+    summarise(Count=n()) %>%
+    arrange(class, Ensemble) %>%
+    pivot_wider(names_from=Pseudo, values_from=Count) %>%
+    mutate(`No Pseudo`=ifelse(is.na(`No Pseudo`),0,`No Pseudo`),
+           Tied=(`No Pseudo` + Pseudo) - length(datasets),
+           Pseudo=Pseudo - Tied,
+           `No Pseudo`= `No Pseudo` - Tied,
+           Pseudo=Pseudo+Tied) %>%
+    ungroup() %>%  
+    select(-Tied) %>%
+    pivot_longer(cols=c(`No Pseudo`, Pseudo), names_to='Category', values_to='Frequency') %>%
+    ggplot() + aes(x=model,y=Frequency, fill=Category) +
+    geom_col() + facet_grid(Ensemble ~ class) +
+    coord_flip() +
+    labs(x='Model',title='Freq. of pseudo outperforming no pseudo (PR-AUC)') +
+    theme(strip.text = element_text(face="bold", size=16),
+          axis.text.x = element_text(size=16, face='bold'),
+          axis.text.y = element_text(size=16, face='bold'),
+          axis.title.x = element_text(size=16, face='bold'),
+          axis.title.y = element_text(size=16, face='bold'),
+          plot.title = element_text(size=16, face='bold'),
+          legend.text = element_text(size=16, face='bold'),
+          legend.title = element_text(size=16, face='bold'))
+if (save_plot) {
+  ggsave(filename='./Figs/1.2-ProportionPseudo-PR.pdf',
+       plot=last_plot())
+  ggsave(filename='./Figs/1.2-ProportionPseudo-PR.png',
+       plot=last_plot())
+}
+```
+
+## AUC Spread
+```{r}
+df_all %>%
+  filter(model %in% md1) %>% 
+  filter(Ensemble=='Individual') %>%
+  ggplot() + aes(dataset, auc, col=Pseudo, size=1) +
+  geom_point(size=2) + facet_grid(model ~ class, scale='free_y') + 
+  ggtitle('Comparison of pseudo and no pseudo (ROC-AUC) values') +
+  labs(y='ROC-AUC', x='Model') + 
+  guides(size=FALSE) +
+    theme(
+          axis.text.x = element_text(angle = 45, hjust=1))
+
+# ggsave(filename='./Figs/tmp.pdf',
+#        plot=last_plot())
+```
+
+```{r}
+df_all %>%
+  filter(model %in% md2) %>% 
+  filter(Ensemble=='Individual') %>%
+  ggplot() + aes(dataset, auc_pr, col=Pseudo, size=1) +
+  geom_point(size=2) + facet_grid(model ~ class, scale='free_y') + 
+  ggtitle('Comparison of pseudo and no pseudo (PR-AUC) values') +
+  labs(y='PR-AUC', x='Model') + 
+  guides(size=FALSE)+
+    theme(
+          axis.text.x = element_text(angle = 45, hjust=1))
+
+ggsave(filename='./Figs/tmp.pdf',
+       plot=last_plot())
+```
+
+```{r}
+df_all %>%
+  filter(Ensemble=='Ensemble',
+         model=='KNN') %>%
+  group_by(class, dataset) %>%
+  mutate(d = max(auc_pr)-min(auc_pr)) %>%
+  select(auc_pr,d,class,dataset,Pseudo,Ensemble) %>%
+  arrange(class,dataset,desc(auc_pr))
+```
+
+
+
+```{r}
+df_all %>% 
+  filter(Ensemble=='Individual') %>%
+  ggplot() + aes(dataset, auc, col=Pseudo, size=1) +
+  geom_point() + facet_grid(model ~ class, scale='free_y') + 
+  ggtitle('Comparison of pseudo and no pseudo (ROC-AUC) values') +
+  labs(y='ROC-AUC', x='Model') + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16, angle = 45, hjust=1),
+          axis.text.y = element_text(size=10),
+          axis.title.x = element_text(size=16),
+          plot.title = element_text(size=14),
+          axis.title.y = element_text(size=12)) + 
+  guides(size=FALSE)
+
+if (save_plot) {
+  ggsave(filename='./Figs/1.3-AUCSpread-ROC-Ind2.png',
+       plot=last_plot(),
+       height=8,width=6)
+  ggsave(filename='./Figs/1.3-AUCSpread-ROC-Ind.png',
+       plot=last_plot(),
+       height=8,width=6)
+  
+}
+
+df_all %>% 
+  filter(Ensemble=='Ensemble') %>%
+  ggplot() + aes(dataset, auc, col=Pseudo) +
+  geom_point() + facet_grid(model ~ class, scale='free_y') + 
+  ggtitle('Comparison of pseudo and no pseudo (ROC-AUC) values') + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16, angle = 45, hjust=1),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14),
+          legend.position = 'bottom') + 
+  labs(y='ROC-AUC', x='Model') 
+
+if (save_plot) {
+  ggsave(filename='./Figs/1.3-AUCSpread-ROC-Ens.png',
+       plot=last_plot(),
+       height=8,
+       width=6)
+}
+
+```
+
+```{r}
+df_all %>% 
+  filter(Ensemble=='Ensemble',
+         model %in% md1) %>%
+  ggplot() + aes(dataset, auc, col=Pseudo) +
+  geom_point() + facet_grid(model ~ class, scale='free_y') + 
+   ggtitle('Comparison of pseudo and no pseudo (PR-AUC) values') +
+  labs(y='PR-AUC', x='Dataset') + 
+  theme(strip.text = element_text(face="bold", size=20),
+        axis.text.x = element_text(size=16, angle = 45, hjust=1),
+        axis.text.y = element_text(size=10),
+        axis.title.x = element_text(size=16),
+        axis.title.y = element_text(size=12),
+        plot.title = element_text(size=14),
+        legend.position = 'bottom')
+
+if (save_plot)
+    ggsave(filename='./Figs/1.4-AUCSpread-PR-Ind.png',
+       plot=last_plot())
+
+df_all %>% 
+  filter(Ensemble=='Ensemble') %>%
+  ggplot() + aes(dataset, auc, col=Pseudo) +
+  geom_point() + facet_grid(model ~ class, scale='free_y') + 
+   ggtitle('Comparison of pseudo and no pseudo (PR-AUC) values') +
+  theme(axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=6),
+        axis.title.x = element_text(size=12),
+        axis.title.y = element_text(size=8),
+        legend.position = 'bottom') + 
+  labs(y='PR-AUC', x='Dataset') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+if (save_plot)
+    ggsave(filename='./Figs/1.4-AUCSpread-PR-Ens.png',
+       plot=last_plot(),
+       height=8,
+       width=6)
+```
+
+
+```{r}
+df_all %>%
+  filter(Ensemble!='Ensemble') %>%
+  group_by(dataset, class, model,Ensemble) %>%
+  mutate(Difference=max(auc)-min(auc)) %>%
+  arrange(dataset, class, model,desc(auc)) %>%
+  top_n(1, auc) %>%
+  group_by(class, model, Pseudo, Ensemble) %>%
+  summarise(Difference=mean(Difference )) %>%
+  ggplot() + aes(Pseudo, Difference, fill=Pseudo) +
+  geom_col() + facet_grid(Ensemble + class ~ model ) + 
+  labs(title = 'Average difference between pseudo and no pseudo (ROC-AUC)')  + 
+  theme(axis.text.x = element_blank()) + labs(x='') + 
+  theme(strip.text = element_text(face="bold", size=12),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size=12, face='bold')) + 
+  labs(x='')
+
+ggsave(filename='./Figs/tmp.pdf',
+       plot=last_plot())
+
+```
+
+
+```{r}
+df_all %>%
+  filter(Ensemble=='Ensemble') %>%
+  group_by(dataset, class, model,Ensemble) %>%
+  mutate(Difference=max(auc)-min(auc)) %>%
+  arrange(dataset, class, model,desc(auc)) %>%
+  filter(auc==max(auc)) %>%
+  group_by(class, model, Pseudo, Ensemble) %>%
+  summarise(Difference=mean(Difference )) %>%
+  ggplot() + aes(Pseudo, Difference, fill=Pseudo) +
+  geom_col() + facet_grid(Ensemble + class ~ model ) + 
+  labs(title = 'Average difference between pseudo and no pseudo (ROC-AUC)')  + 
+  theme(axis.text.x = element_blank()) + labs(x='') +
+  theme(strip.text = element_text(face="bold", size=16),
+        axis.text.y = element_text(size=12),
+        axis.title.y = element_text(size=12))
+```
+
+```{r}
+df_all %>%
+  filter(Ensemble=='Individual',
+         model=='SS') %>%
+  group_by(dataset, class, model, Ensemble) %>%
+  mutate(Difference=max(auc_pr)-min(auc_pr)) %>%
+  
+```
+
+```{r}
+df_all %>%
+  filter(Ensemble=='Individual',
+         model=='SS') %>%
+  group_by(dataset, class, model, Ensemble) %>%
+  mutate(Difference=max(auc_pr)-min(auc_pr)) %>%
+  filter(auc_pr==max(auc_pr))
+```
+
+
+
+```{r}
+df_all %>%
+  filter(Ensemble!='Individual') %>%
+  group_by(dataset, class, model,Ensemble) %>%
+  mutate(Difference=max(auc_pr)-min(auc_pr)) %>%
+  arrange(dataset, class, model,desc(auc_pr)) %>%
+  filter(auc_pr==max(auc_pr)) %>%
+  group_by(class, model, Pseudo, Ensemble) %>%
+  summarise(Difference=mean(Difference )) %>%
+  ggplot() + aes(Pseudo, Difference, fill=Pseudo) +
+  geom_col() + facet_grid(Ensemble + class ~ model ) + 
+  labs(title = 'Average difference between pseudo and no pseudo (PR-AUC)')   + 
+  theme(axis.text.x = element_blank()) + labs(x='') + 
+  theme(strip.text = element_text(face="bold", size=12),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size=12, face='bold')) + 
+  labs(x='')
+
+ggsave(filename='./Figs/tmp.pdf',
+       plot=last_plot())
+```
+
+
+## Avg Difference
+```{r}
+df_all %>%
+  filter()
+  group_by(dataset, class, model,Ensemble) %>%
+  mutate(Difference=max(auc)-min(auc)) %>%
+  arrange(dataset, class, model,desc(auc)) %>%
+  top_n(1, auc) %>%
+  group_by(class, model, Pseudo, Ensemble) %>%
+  summarise(Difference=mean(Difference )) %>%
+  ggplot() + aes(Pseudo, Difference, fill=Pseudo) +
+  geom_col() + facet_grid(Ensemble + class ~ model ) + 
+  labs(title = 'Average difference between pseudo and no pseudo (ROC-AUC)')  + 
+  theme(axis.text.x = element_blank()) + labs(x='')
+if (save_plot) {
+    ggsave(filename='./Figs/1.5-AvgImprovement-ROC.pdf',
+       plot=last_plot())
+  ggsave(filename='./Figs/1.5-AvgImprovement-ROC.png',
+       plot=last_plot())
+}
+
+df_all %>%
+  group_by(dataset, class, model,Ensemble) %>%
+  mutate(Difference=max(auc_pr)-min(auc_pr)) %>%
+  arrange(dataset, class, model,desc(auc_pr)) %>%
+  top_n(1, auc_pr) %>%
+  group_by(class, model, Pseudo, Ensemble) %>%
+  summarise(Difference=mean(Difference )) %>%
+  ggplot() + aes(Pseudo, Difference, fill=Pseudo) +
+  geom_col() + facet_grid(Ensemble + class ~ model ) + 
+  labs(title = 'Average difference between pseudo and no pseudo (PR-AUC)')  + 
+  theme(axis.text.x = element_blank()) + labs(x='')
+if (save_plot) 
+    ggsave(filename='./Figs/1.5-AvgImprovement-PR.pdf',
+       plot=last_plot())
+```
+
+## Wilcoxon Signed Rank Test
+
+```{r}
+ensem = 'Ensemble' 
+ensem = 'Individual'
+
+tmp = df_all %>%
+  filter(Ensemble==ensem) %>%
+  select(auc,class,dataset,Pseudo, model) %>%
+  group_by(class, dataset, model) %>%
+  pivot_wider(names_from = Pseudo, values_from=auc) %>%
+  group_by(class, model) %>%
+  summarise(p=(wilcox.test(Pseudo,`No Pseudo`, paired=TRUE, alternative=c('greater'))$p.value)) 
+
+grid.newpage()
+
+experi = data.frame(MAPK1=tmp %>% filter(class=='MAPK1') %>%
+                    arrange(model) %>% pull(p),
+           MTOR=tmp %>% filter(class=='MTOR') %>%
+                    arrange(model) %>% pull(p),
+           row.names = tmp %>% filter(class=='MTOR') %>%
+                    arrange(model) %>% pull(model)) 
+
+cols = matrix(0,nrow = nrow(experi), ncol=ncol(experi)) 
+cols[experi > 0.05] = 'black'
+cols[experi < 0.05] = 'red'
+tt <- ttheme_default(core=list(fg_params = list(col = cols),
+                                bg_params = list(col=NA)),
+                      rowhead=list(bg_params = list(col=NA)),
+                      colhead=list(bg_params = list(col=NA)))
+tab = experi %>%
+  tableGrob(col=c('MAPK1', 'MTOR'), theme=tt) 
+
+grid.newpage()
+grid.draw(tab)
+if (save_plot) 
+  ggsave(filename='./Figs/1.7-Wilcoxon-ROC.pdf',
+       plot=tab)
+```
+
+
+```{r}
+tmp = df_all %>%
+  filter(Ensemble==ensem) %>%
+  select(auc_pr,class,dataset,Pseudo, model) %>%
+  group_by(class, dataset, model) %>%
+  pivot_wider(names_from = Pseudo, values_from=auc_pr) %>%
+  group_by(class, model) %>%
+  summarise(p=(wilcox.test(Pseudo,`No Pseudo`, paired=TRUE, alternative=c('two.sided'))$p.value) ) 
+
+grid.newpage()
+
+experi = data.frame(MAPK1=tmp %>% filter(class=='MAPK1') %>%
+                    arrange(model) %>% pull(p),
+           MTOR=tmp %>% filter(class=='MTOR') %>%
+                    arrange(model) %>% pull(p),
+           row.names = tmp %>% filter(class=='MTOR') %>%
+                    arrange(model) %>% pull(model)) 
+
+cols = matrix(0,nrow = nrow(experi), ncol=ncol(experi)) 
+cols[experi > 0.05] = 'black'
+cols[experi < 0.05] = 'red'
+tt <- ttheme_default(core=list(fg_params = list(col = cols),
+                                bg_params = list(col=NA)),
+                      rowhead=list(bg_params = list(col=NA)),
+                      colhead=list(bg_params = list(col=NA)))
+tab = experi %>%
+  tableGrob(col=c('MAPK1', 'MTOR'), theme=tt) 
+
+grid.newpage()
+grid.draw(tab)
+if (save_plot) 
+  ggsave(filename='./Figs/1.8-Wilcoxon-PR.pdf',
+       plot=tab)
+```
+
+# 2 - Ensemble
+
+## Frequency Visual
+```{r}
+df_all %>%
+    group_by(dataset, class, model, Pseudo) %>%
+    filter(auc==max(auc)) %>%
+    ungroup() %>%
+    group_by(class,model,Ensemble,Pseudo) %>%
+    summarise(Count=n()) %>%
+    pivot_wider(names_from=Ensemble, values_from=Count)  %>%
+    mutate(Individual=ifelse(is.na(Individual),0,Individual),
+           Tied=(Individual + Ensemble) - 8,
+           Ensemble=Ensemble - Tied,
+           Individual= Individual - Tied,
+           Ensemble=Ensemble+Tied) %>%
+    ungroup() %>%  
+    select(-Tied) %>%
+    pivot_longer(cols=c(Individual, Ensemble), names_to='Category', values_to='Frequency')%>%
+    ggplot() + aes(x=model,y=Frequency, fill=Category) +
+    geom_col() + scale_fill_manual(values=c('#00BFC4','#F8766D')) + 
+    facet_grid(Pseudo ~ class) +
+    coord_flip() + 
+    labs(x='Model', title='Proportion  of ensemble outperforming individual (ROC-AUC)') +
+    theme(strip.text = element_text(face="bold", size=16),
+          axis.text.x = element_text(size=16, face='bold'),
+          axis.text.y = element_text(size=16, face='bold'),
+          axis.title.x = element_text(size=16, face='bold'),
+          axis.title.y = element_text(size=16, face='bold'),
+          plot.title = element_text(size=16, face='bold'),
+          legend.text = element_text(size=16, face='bold'),
+          legend.title = element_text(size=16, face='bold'))
+
+if (save_plot) 
+  ggsave(filename='./Figs/2.1-ProportionEnsemble-ROC.pdf',
+       plot=tab)
+```
+```{r}
+df_all %>%
+    group_by(dataset, class, model, Pseudo) %>%
+    filter(auc_pr==max(auc_pr)) %>%
+    ungroup() %>%
+    group_by(class,model,Ensemble,Pseudo) %>%
+    summarise(Count=n()) %>%
+    pivot_wider(names_from=Ensemble, values_from=Count)  %>%
+    mutate(Individual=ifelse(is.na(Individual),0,Individual),
+           Tied=(Individual + Ensemble) - 8,
+           Ensemble=Ensemble - Tied,
+           Individual= Individual - Tied,
+           Ensemble=Ensemble+Tied) %>%
+    ungroup() %>%  
+    select(-Tied) %>%
+    pivot_longer(cols=c(Individual, Ensemble), names_to='Category', values_to='Frequency')%>%
+    ggplot() + aes(x=model,y=Frequency, fill=Category) +
+    geom_col() + scale_fill_manual(values=c('#00BFC4','#F8766D')) + 
+    facet_grid(Pseudo ~ class) +
+    coord_flip() + 
+    labs(x='Model', title='Proportion  of ensemble outperforming individual (PR-AUC)')   +
+    theme(strip.text = element_text(face="bold", size=16),
+          axis.text.x = element_text(size=16, face='bold'),
+          axis.text.y = element_text(size=16, face='bold'),
+          axis.title.x = element_text(size=16, face='bold'),
+          axis.title.y = element_text(size=16, face='bold'),
+          plot.title = element_text(size=16, face='bold'),
+          legend.text = element_text(size=16, face='bold'),
+          legend.title = element_text(size=16, face='bold'))
+
+if (save_plot) 
+  ggsave(filename='./Figs/2.1-ProportionEnsemble-PR.pdf',
+       plot=tab)
+```
+
+```{r}
+df_all %>% 
+  filter(Pseudo=='Pseudo',
+         model %in% md1) %>%
+  ggplot() + aes(dataset, auc, col=Ensemble) +
+  geom_point(size=2) + facet_grid(model ~ class, scale='free_y') + 
+  ggtitle('Comparison of ensemble and individual (ROC-AUC) values') +
+  labs(y='ROC-AUC', x='Model') + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16, angle = 45, hjust=1),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14),
+          legend.position = 'bottom') 
+```
+
+```{r}
+df_all %>% 
+  filter(Pseudo!='Pseudo',
+         model %in% md1) %>%
+  ggplot() + aes(dataset, auc, col=Ensemble) +
+  geom_point(size=2) + facet_grid(model ~ class, scale='free_y') + 
+  ggtitle('Comparison of ensemble and individual (ROC-AUC) values') +
+  labs(y='ROC-AUC', x='Model') + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16, angle = 45, hjust=1),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14),
+          legend.position = 'bottom') 
+```
+
+
+
+```{r}
+df_all %>% 
+  filter(Pseudo=='Pseudo') %>%
+  ggplot() + aes(dataset, auc, col=Ensemble) + scale_color_manual(values=c('#00BFC4','#F8766D')) + 
+  geom_point(size=2) + facet_grid(model ~ class, scale='free_y') + 
+  ggtitle('Comparison of ensemble and individual (ROC-AUC) values') +
+  labs(y='ROC-AUC', x='Model') + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16, angle = 45, hjust=1),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14),
+          legend.position = 'bottom') 
+ggsave(filename='./Figs/2.2-AUCSpread-ROC-Pse.pdf',
+       plot=last_plot())
+
+```
+
+## AUC Spread
+```{r}
+df_all %>% 
+  filter(Pseudo=='Pseudo') %>%
+  ggplot() + aes(dataset, auc, col=Ensemble) +
+  geom_point(size=2) + facet_grid(model ~ class, scale='free_y') + 
+  ggtitle('Comparison of ensemble and individual (ROC-AUC) values') +
+  labs(y='ROC-AUC', x='Model') + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16, angle = 45, hjust=1),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14),
+          legend.position = 'bottom') 
+
+if (save_plot)
+    ggsave(filename='./Figs/2.2-AUCSpread-ROC-Pse.png',
+       plot=last_plot(),
+       height=8,
+       width=6)
+
+df_all %>% 
+  filter(Pseudo=='No Pseudo') %>%
+  ggplot() + aes(dataset, auc, col=Ensemble) +
+  geom_point() + facet_grid(model ~ class, scale='free_y') + 
+  ggtitle('Comparison of ensemble and individual (ROC-AUC) values') +
+  theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16, angle = 45, hjust=1),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14),
+          legend.position = 'bottom') +
+  labs(y='ROC-AUC', x='Model') 
+
+if (save_plot)
+    ggsave(filename='./Figs/2.2-AUCSpread-ROC-NoPse.png',
+       plot=last_plot(),
+       height=8,
+       width=6)
+```
+
+```{r}
+df_all %>% 
+  filter(Pseudo=='Pseudo',
+         model %in% md2) %>%
+  ggplot() + aes(dataset, auc, col=Ensemble) +
+  geom_point(size=2) + facet_grid(model ~ class, scale='free_y') + 
+  ggtitle('Comparison of ensemble and individual (ROC-AUC) values') +
+  labs(y='ROC-AUC', x='Model') + 
+    theme(strip.text = element_text(face="bold", size=12),
+          axis.text.y = element_text(size=11),
+          axis.title.y = element_text(size=12, face='bold')) 
+ggsave(filename='./Figs/tmp.pdf',
+       plot=last_plot())
+```
+
+
+```{r}
+df_all %>% 
+  filter(Pseudo=='Pseudo',
+         model %in% md2) %>%
+  ggplot() + aes(dataset, auc_pr, col=Ensemble) +
+  geom_point(size=2) + facet_grid(model ~ class, scale='free_y') + 
+  ggtitle('Comparison of ensemble and individual (PR-AUC) values') +
+  labs(y='PR-AUC', x='Model') + 
+    theme(strip.text = element_text(face="bold", size=12),
+          axis.text.y = element_text(size=11),
+          axis.title.y = element_text(size=12, face='bold')) 
+
+ggsave(filename='./Figs/tmp.pdf',
+       plot=last_plot())
+```
+
+```{r}
+df_all %>% 
+  filter(Pseudo=='Pseudo',
+         model %in% md1) %>%
+  ggplot() + aes(dataset, auc_pr, col=Ensemble) +
+  geom_point(size=2) + facet_grid(model ~ class, scale='free_y') + 
+   ggtitle('Comparison of ensemble and individual (PR-AUC) values') +
+  labs(y='ROC-AUC', x='Model') + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16, angle = 45, hjust=1),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14),
+          legend.position = 'bottom') 
+```
+
+
+
+```{r}
+df_all %>% 
+  filter(Pseudo=='Pseudo') %>%
+  ggplot() + aes(dataset, auc_pr, col=Ensemble) +
+  geom_point() + facet_grid(model ~ class, scale='free_y') + 
+   ggtitle('Comparison of ensemble and individual (PR-AUC) values') +
+  theme(axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=8),
+        axis.title.x = element_text(size=12),
+        axis.title.y = element_text(size=8),
+        legend.position = 'bottom') + 
+  labs(y='PR-AUC', x='Dataset') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+
+if (save_plot)
+    ggsave(filename='./Figs/2.3-AUCSpread-PR-Pse.png',
+       plot=last_plot(),
+       height=8,
+       width=6)
+
+df_all %>% 
+  filter(Pseudo=='No Pseudo') %>%
+  ggplot() + aes(dataset, auc_pr, col=Ensemble) +
+  geom_point() + facet_grid(model ~ class, scale='free_y') + 
+   ggtitle('Comparison of ensemble and individual (PR-AUC) values') +
+  theme(axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=8),
+        axis.title.x = element_text(size=12),
+        axis.title.y = element_text(size=8),
+        legend.position = 'bottom') + 
+  labs(y='PR-AUC', x='Dataset') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+if (save_plot)
+    ggsave(filename='./Figs/2.3-AUCSpread-PR-NoPse2.png',
+       plot=last_plot(),
+       height=8,
+       width=6)
+```
+
+```{r}
+df_all %>%
+  filter(Pseudo=='No Pseudo') %>%
+  group_by(dataset, class, model,Pseudo) %>%
+  mutate(Difference=max(auc)-min(auc)) %>%
+  arrange(dataset, class, model,desc(auc)) %>%
+  top_n(1, auc) %>%
+  group_by(class, model, Pseudo, Ensemble) %>%
+  summarise(Difference=mean(Difference )) %>%
+  ggplot() + aes(Ensemble, Difference, fill=Ensemble) +
+  scale_fill_manual(values=c('#00BFC4','#F8766D')) + 
+  geom_col() + facet_grid(Pseudo + class ~ model ) + 
+  labs(title = 'Average difference between ensemble and indivudal (ROC-AUC)')  + 
+  theme(strip.text = element_text(face="bold", size=12),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size=12, face='bold')) + 
+  labs(x='')
+
+ggsave(filename='./Figs/tmp.pdf',
+       plot=last_plot())
+```
+
+```{r}
+df_all %>%
+  filter(Pseudo!='Pseudo') %>%
+  group_by(dataset, class, model,Pseudo) %>%
+  mutate(Difference=max(auc_pr)-min(auc_pr)) %>%
+  arrange(dataset, class, model,desc(auc_pr)) %>%
+  top_n(1, auc_pr) %>%
+  group_by(class, model, Pseudo, Ensemble) %>%
+  summarise(Difference=mean(Difference )) %>%
+  ggplot() + aes(Ensemble, Difference, fill=Ensemble) +
+  scale_fill_manual(values=c('#00BFC4','#F8766D')) + 
+  geom_col() + facet_grid(Pseudo + class ~ model ) + 
+  labs(title = 'Average difference between ensemble and indivudal (PR-AUC)') + 
+  theme(strip.text = element_text(face="bold", size=12),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size=12, face='bold')) + 
+  labs(x='')
+
+ggsave(filename='./Figs/tmp.pdf',
+       plot=last_plot())
+
+```
+
+## Avg Difference
+```{r}
+df_all %>%
+  group_by(dataset, class, model,Pseudo) %>%
+  mutate(Difference=max(auc)-min(auc)) %>%
+  arrange(dataset, class, model,desc(auc)) %>%
+  top_n(1, auc) %>%
+  group_by(class, model, Pseudo, Ensemble) %>%
+  summarise(Difference=mean(Difference )) %>%
+  ggplot() + aes(Ensemble, Difference, fill=Ensemble) +
+  scale_fill_manual(values=c('#00BFC4','#F8766D')) + 
+  geom_col() + facet_grid(Pseudo + class ~ model ) + 
+  labs(title = 'Average difference between ensemble and indivudal (ROC-AUC)')  + 
+  theme(axis.text.x = element_blank()) + labs(x='')
+if (save_plot) 
+    ggsave(filename='./Figs/2.4-AvgImprovement-ROC.pdf',
+       plot=last_plot(),
+       width=10)
+
+df_all %>%
+  group_by(dataset, class, model,Pseudo) %>%
+  mutate(Difference=max(auc_pr)-min(auc_pr)) %>%
+  arrange(dataset, class, model,desc(auc_pr)) %>%
+  top_n(1, auc_pr) %>%
+  group_by(class, model, Pseudo, Ensemble) %>%
+  summarise(Difference=mean(Difference )) %>%
+  ggplot() + aes(Ensemble, Difference, fill=Ensemble) +
+  scale_fill_manual(values=c('#00BFC4','#F8766D')) + 
+  geom_col() + facet_grid(Pseudo + class ~ model ) + 
+  labs(title = 'Average difference between ensemble and indivudal (ROC-AUC)')  + 
+  theme(axis.text.x = element_blank()) + labs(x='')
+if (save_plot) 
+    ggsave(filename='./Figs/2.4-AvgImprovement-PR.pdf',
+       plot=last_plot())
+```
+
+
+## Wilcoxon Signed Rank Test
+
+```{r}
+tmp = df_all %>%
+  filter(Pseudo=='Pseudo') %>%
+  select(auc,class,dataset,Ensemble, model) %>%
+  group_by(class, dataset, model) %>%
+  pivot_wider(names_from = Ensemble, values_from=auc) %>%
+  group_by(class, model) %>%
+  summarise(p=(wilcox.test(Ensemble,Individual, paired=TRUE, alternative=c('greater'))$p.value)) 
+
+grid.newpage()
+
+experi = data.frame(MAPK1=tmp %>% filter(class=='MAPK1') %>%
+                    arrange(model) %>% pull(p),
+           MTOR=tmp %>% filter(class=='MTOR') %>%
+                    arrange(model) %>% pull(p),
+           row.names = tmp %>% filter(class=='MTOR') %>%
+                    arrange(model) %>% pull(model)) 
+
+cols = matrix(0,nrow = nrow(experi), ncol=ncol(experi)) 
+cols[experi > 0.05] = 'black'
+cols[experi < 0.05] = 'red'
+tt <- ttheme_default(core=list(fg_params = list(col = cols),
+                                bg_params = list(col=NA)),
+                      rowhead=list(bg_params = list(col=NA)),
+                      colhead=list(bg_params = list(col=NA)))
+tab = experi %>%
+  tableGrob(col=c('MAPK1', 'MTOR'), theme=tt) 
+
+grid.newpage()
+grid.draw(tab)
+```
+
+```{r}
+df_all %>%
+  filter(Pseudo=='Pseudo') %>%
+  select(auc,class,dataset,Ensemble, model) %>%
+  group_by(class, dataset, model) %>%
+  pivot_wider(names_from = Ensemble, values_from=auc) %>%
+  filter(model=='SVM')  %>%
+  group_by(class, model) %>%
+  summarise(p=(wilcox.test(Ensemble,Individual, paired=TRUE, alternative=c('greater'))$p.value)) 
+```
+```{r}
+df_all %>%
+  filter(Pseudo=='Pseudo') %>%
+  select(auc,class,dataset,Ensemble, model) %>%
+  group_by(class, dataset, model) %>%
+  pivot_wider(names_from = Ensemble, values_from=auc) %>%
+  filter(model=='SVM',
+         class=='MAPK1') %>%
+  mutate(a = Ensemble-Individual) 
+```
+
+
+
+```{r}
+psed = 'Pseudo' 
+psed = 'No Pseudo'
+
+tmp = df_all %>%
+  filter(Pseudo==psed) %>%
+  select(auc,class,dataset,Ensemble, model) %>%
+  group_by(class, dataset, model) %>%
+  pivot_wider(names_from = Ensemble, values_from=auc) %>%
+  group_by(class, model) %>%
+  summarise(p=(wilcox.test(Ensemble,Individual, paired=TRUE, alternative=c('greater'))$p.value)) 
+
+grid.newpage()
+
+experi = data.frame(MAPK1=tmp %>% filter(class=='MAPK1') %>%
+                    arrange(model) %>% pull(p),
+           MTOR=tmp %>% filter(class=='MTOR') %>%
+                    arrange(model) %>% pull(p),
+           row.names = tmp %>% filter(class=='MTOR') %>%
+                    arrange(model) %>% pull(model)) 
+
+cols = matrix(0,nrow = nrow(experi), ncol=ncol(experi)) 
+cols[experi > 0.05] = 'black'
+cols[experi < 0.05] = 'red'
+tt <- ttheme_default(core=list(fg_params = list(col = cols),
+                                bg_params = list(col=NA)),
+                      rowhead=list(bg_params = list(col=NA)),
+                      colhead=list(bg_params = list(col=NA)))
+tab = experi %>%
+  tableGrob(col=c('MAPK1', 'MTOR'), theme=tt) 
+
+grid.newpage()
+grid.draw(tab)
+if (save_plot) 
+  ggsave(filename='./Figs/2.5-Wilcoxon-ROC.pdf',
+       plot=tab)
+```
+
+
+```{r}
+tmp = df_all %>%
+  filter(Pseudo==psed) %>%
+  select(auc_pr,class,dataset,Ensemble, model) %>%
+  group_by(class, dataset, model) %>%
+  pivot_wider(names_from = Ensemble, values_from=auc_pr) %>%
+  group_by(class, model) %>%
+  summarise(p=(wilcox.test(Ensemble,Individual, paired=TRUE, alternative=c('two.sided'))$p.value) ) 
+
+grid.newpage()
+
+experi = data.frame(MAPK1=tmp %>% filter(class=='MAPK1') %>%
+                    arrange(model) %>% pull(p),
+           MTOR=tmp %>% filter(class=='MTOR') %>%
+                    arrange(model) %>% pull(p),
+           row.names = tmp %>% filter(class=='MTOR') %>%
+                    arrange(model) %>% pull(model)) 
+
+cols = matrix(0,nrow = nrow(experi), ncol=ncol(experi)) 
+cols[experi > 0.05] = 'black'
+cols[experi < 0.05] = 'red'
+tt <- ttheme_default(core=list(fg_params = list(col = cols),
+                                bg_params = list(col=NA)),
+                      rowhead=list(bg_params = list(col=NA)),
+                      colhead=list(bg_params = list(col=NA)))
+tab = experi %>%
+  tableGrob(col=c('MAPK1', 'MTOR'), theme=tt) 
+
+grid.newpage()
+grid.draw(tab)
+if (save_plot) 
+  ggsave(filename='./Figs/2.5-Wilcoxon-PR.pdf',
+       plot=tab)
+```
+
+
+
+# 3 - Comparison: Individual
+```{r}
+df_ind = df_all %>%
+  filter(Ensemble == 'Individual')
+```
+
+```{r}
+p = 'Pseudo'
+e = 'Individual'
+df_comp = df_all %>%
+  filter(Ensemble == e,
+         Pseudo == p)
+```
+
+```{r}
+df_comp %>%
+  filter(model=='Snapshot')
+```
+
+
+```{r}
+df_all %>%
+  filter(model=='Snapshot')
+```
+
+
+## Model Performance
+```{r}
+df_comp %>%
+  ggplot() + aes(dataset,auc,col=model,label=Label) + 
+  geom_point() + geom_text(hjust=1, vjust=-0.4, size=3) + coord_flip() +
+  labs(title='Model performance (ROC-AUC)') +
+  facet_grid(. ~ class)  + 
+  labs(x='Datasets', y='ROC-AUC') + 
+    theme(strip.text = element_text(face="bold", size=12),
+          axis.text.x = element_text(size=12),
+          axis.text.y = element_text(size=12),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          plot.title = element_text(size=12)) 
+ggsave(filename='./Figs/Roc-auc-comp.pdf',
+       plot=last_plot())
+
+df_comp %>%
+  ggplot() + aes(dataset,auc_pr,col=model,label=Label_pr) + 
+  geom_point() + geom_text(hjust=1, vjust=-0.4, size=3) + coord_flip() +
+  labs(title='Model performance (PR-AUC)') +
+  facet_grid(. ~ class)  + 
+  labs(x='Datasets', y='PR-AUC') + 
+    theme(strip.text = element_text(face="bold", size=12),
+          axis.text.x = element_text(size=12),
+          axis.text.y = element_text(size=12),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          plot.title = element_text(size=12)) 
+ggsave(filename='./Figs/PR-auc-comp.pdf',
+       plot=last_plot())
+
+df_comp %>%
+  group_by(class,model) %>%
+  summarise(AUC=mean(auc),Rank=mean(Rank)) %>%
+  ungroup() %>%
+  group_by(class) %>%
+  arrange(class, Rank) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Rank, fill=model) + 
+  geom_col() + facet_grid(. ~ class) + 
+  ggtitle('Average rank over every dataset by class (ROC-AUC)') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(x='', y='Average Rank', fill='Models')    + 
+    theme(strip.text = element_text(face="bold", size=12),
+          axis.text.y = element_text(size=12),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          plot.title = element_text(size=12))
+
+ggsave(filename='./Figs/ROCfil-comp.pdf',
+       plot=last_plot())
+
+df_comp %>%
+  group_by(class,model) %>%
+  summarise(AUC=mean(auc_pr),Rank=mean(Rank_pr)) %>%
+  ungroup() %>%
+  group_by(class) %>%
+  arrange(class, Rank) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Rank, fill=model) + 
+  geom_col() + facet_grid(. ~ class) + 
+  ggtitle('Average rank over every dataset by class (PR-AUC)') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(x='', y='Average Rank', fill='Models')   + 
+    theme(strip.text = element_text(face="bold", size=12),
+          axis.text.y = element_text(size=12),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          plot.title = element_text(size=12))
+
+ggsave(filename='./Figs/PRavg-comp.pdf',
+       plot=last_plot())
+
+df_comp %>%
+  mutate(Rating=cut(Rank, breaks=c(-Inf,3.5,5.5,Inf), labels=c('Good','Intermediate','Poor'))) %>%
+  ggplot() + aes(dataset, model, col='A', fill=Rating) +
+  geom_point(shape=22, size=10) + facet_grid(. ~ class) +
+  guides(col=FALSE) +
+  scale_color_manual(values = '#000000') + 
+  scale_fill_manual(values=c('#1E4160','#007C92','#F3FF82')) + 
+  theme(panel.grid=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y = element_text(face='bold',
+                                 size=12),
+        axis.text.x = element_text(face='bold')) +
+  labs(title='Categorical Ranking with ROC-AUC') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1),
+          legend.position='none',
+        axis.title.x = element_blank(),
+          axis.title.y = element_blank(),)
+
+ggsave(filename='./Figs/ROCCat-comp.pdf',
+       plot=last_plot())
+
+df_comp %>%
+  mutate(Rating=cut(Rank_pr, breaks=c(-Inf,3.5,5.5,Inf), labels=c('Good','Intermediate','Poor'))) %>%
+  ggplot() + aes(dataset, model, col='A', fill=Rating) +
+  geom_point(shape=22, size=10) + facet_grid(. ~ class) +
+  guides(col=FALSE) +
+  scale_color_manual(values = '#000000') + 
+  scale_fill_manual(values=c('#1E4160','#007C92','#F3FF82')) + 
+  theme(panel.grid=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y = element_text(face='bold',
+                                 size=12),
+        axis.text.x = element_text(face='bold'),
+        axis.title.x = element_blank(),
+          axis.title.y = element_blank(),) +
+  labs(title='Categorical Ranking with PR-AUC') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1),
+          legend.position='none')
+
+ggsave(filename='./Figs/PRCat-comp.pdf',
+       plot=last_plot())
+```
+
+
+
+
+
+
+## Model Comparison
+```{r}
+df_ind %>%
+  ggplot() + aes(dataset,auc,col=model,label=Label) +
+  geom_point() + geom_text(hjust=1, vjust=-0.4, size=3) + coord_flip() +
+  labs(title='Model performance(ROC-AUC)') +
+  facet_grid(Pseudo ~ class) + 
+  labs(x='Datasets', y='ROC-AUC') + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14))
+
+df_ind %>%
+  ggplot() + aes(dataset,auc_pr,col=model,label=Label_pr) +
+  geom_point() + geom_text(hjust=1, vjust=-0.4, size=3) + coord_flip() +
+  labs(title='Model performance (PR-AUC)') +
+  facet_grid(Pseudo ~ class) + 
+  labs(x='Datasets', y='PR-AUC') + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14))
+```
+
+
+## Frequency of Models
+```{r}
+df_ind %>%
+  filter(Performance_pr == 'Best') %>%
+  group_by(class, model, Pseudo) %>%
+  summarise(Frequency=n()) %>%
+  ungroup() %>%
+  group_by(class, Pseudo) %>%
+  arrange(class, Pseudo, desc(Frequency)) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Frequency, fill=model) + 
+  geom_col() + facet_grid(class ~ Pseudo) +
+  labs(x='', fill='Models', title='Frequency of models with highest ROC-AUC for a dataset') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text.y = element_text(size=12),
+        axis.title.y = element_text(size=8)) 
+
+df_ind %>%
+  filter(Performance_pr == 'Best') %>%
+  group_by(class, model, Pseudo) %>%
+  summarise(Frequency=n()) %>%
+  ungroup() %>%
+  group_by(class, Pseudo) %>%
+  arrange(class, Pseudo, desc(Frequency)) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Frequency, fill=model) + 
+  geom_col() + facet_grid(Pseudo ~ class) +
+  labs(x='', fill='Models', title='Frequency of models with highest PR-AUC for a dataset') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text.y = element_text(size=12),
+        axis.title.y = element_text(size=8)) 
+```
+```{r}
+unique(df_ind$model)
+```
+
+## Average Rank
+```{r}
+df_ind %>%
+  group_by(class,model,Pseudo) %>%
+  summarise(AUC=mean(auc),Rank=mean(Rank)) %>%
+  ungroup() %>%
+  group_by(class,Pseudo) %>%
+  arrange(class, Pseudo, Rank) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Rank, fill=model) + 
+  geom_col() + facet_grid(Pseudo ~ class) + 
+  ggtitle('Average rank over every dataset by class (ROC-AUC)') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(x='', y='Average Rank', fill='Models')   + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16),
+          axis.text.y = element_text(size=16),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=14),
+          plot.title = element_text(size=14))
+```
+
+```{r}
+df_ind %>%
+  group_by(class,model,Pseudo) %>%
+  summarise(AUC=mean(auc_pr),Rank=mean(Rank)) %>%
+  ungroup() %>%
+  group_by(class,Pseudo) %>%
+  arrange(class, Pseudo, Rank) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Rank, fill=model) + 
+  geom_col() + facet_grid(Pseudo ~ class) + 
+  ggtitle('Average rank over every dataset by class (PR-AUC)') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(x='', y='Average Rank', fill='Models')   + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.y = element_text(size=16),
+          axis.title.y = element_text(size=14),
+          plot.title = element_text(size=14),
+          legend.position = 'bottom')
+```
+
+```{r}
+pp = 'Pseudo'
+df_ind %>%
+  filter(Pseudo==pp) %>%
+  ggplot() + aes(dataset,auc,col=model,label=Label) +
+  geom_point() + geom_text(hjust=1, vjust=-0.4, size=5) + coord_flip() +
+  labs(title='Model performance (ROC-AUC)') +
+  facet_grid(. ~ class) + 
+  labs(x='Datasets', y='ROC-AUC') + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14))
+
+df_ind %>%
+  filter(Pseudo==pp) %>%
+  ggplot() + aes(dataset,auc_pr,col=model,label=Label) +
+  geom_point() + geom_text(hjust=1, vjust=-0.4, size=5) + coord_flip() +
+  labs(title='Model performance (PR-AUC)') +
+  facet_grid(. ~ class) + 
+  labs(x='Datasets', y='PR-AUC') + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14))
+
+
+
+df_ind %>%
+  filter(Pseudo==pp) %>%
+  group_by(class,model,Pseudo) %>%
+  summarise(AUC=mean(auc),Rank=mean(Rank)) %>%
+  ungroup() %>%
+  group_by(class,Pseudo) %>%
+  arrange(class, Pseudo, Rank) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Rank, fill=model) + 
+  geom_col() + facet_grid(. ~ class) + 
+  ggtitle('Average rank over every dataset by class (ROC-AUC)') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(x='', y='Average Rank', fill='Models')   + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.y = element_text(size=16),
+          axis.title.y = element_text(size=14),
+          plot.title = element_text(size=14),
+          legend.position = 'bottom')
+
+df_ind %>%
+  filter(Pseudo==pp) %>%
+  group_by(class,model,Pseudo) %>%
+  summarise(AUC=mean(auc_pr),Rank=mean(Rank_pr)) %>%
+  ungroup() %>%
+  group_by(class,Pseudo) %>%
+  arrange(class, Pseudo, Rank) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Rank, fill=model) + 
+  geom_col() + facet_grid(. ~ class) + 
+  ggtitle('Average rank over every dataset by class (PR-AUC)') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(x='', y='Average Rank', fill='Models')   + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.y = element_text(size=16),
+          axis.title.y = element_text(size=14),
+          plot.title = element_text(size=14),
+          legend.position = 'bottom')
+```
+
+```{r}
+df_auc %>%
+  filter(LabelType==filtered) %>%
+  group_by(class, dataset,model) %>%
+  filter(auc_pr == max(auc_pr))
+```
+
+
+
+## Frequency of Top 3
+```{r}
+df_ind %>%
+  filter(Rank <= 3) %>%
+  group_by(class,dataset,Pseudo) %>%
+  summarise(Difference=max(auc)-min(auc)) %>%
+  ggplot() + aes(Difference) + geom_histogram()
+```
+
+
+```{r}
+df_ind %>%
+  filter(Rank <= 3) %>%
+  group_by(class, model, Pseudo) %>%
+  summarise(Frequency=n()) %>%
+  ungroup() %>%
+  group_by(class, Pseudo) %>%
+  arrange(class, Pseudo, desc(Frequency)) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Frequency, fill=model) + 
+  geom_col() + facet_grid(class ~ Pseudo) +
+  labs(x='', fill='Models', title='Frequency of top 3 models with highest ROC-AUC for a dataset') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) 
+  
+```
+
+```{r}
+df_ind %>%
+  filter(Rank_pr <= 3) %>%
+  group_by(class, model, Pseudo) %>%
+  summarise(Frequency=n()) %>%
+  ungroup() %>%
+  group_by(class, Pseudo) %>%
+  arrange(class, Pseudo, desc(Frequency)) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Frequency, fill=model) + 
+  geom_col() + facet_grid(class ~ Pseudo) +
+  labs(x='', fill='Models', title='Frequency of top 3 models with highest PR-AUC for a dataset') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) 
+```
+
+```{r}
+df_ind %>%
+  filter(Pseudo=='Pseudo') %>%
+  mutate(Rating=cut(Rank, breaks=c(-Inf,3.5,5.5,Inf), labels=c('Good','Intermediate','Poor'))) %>%
+  ggplot() + aes(dataset, model, col='A', fill=Rating) +
+  geom_point(shape=22, size=10) + facet_grid(. ~ class) +
+  guides(col=FALSE) +
+  scale_color_manual(values = '#000000') + 
+  scale_fill_manual(values=c('#1E4160','#007C92','#F3FF82')) + 
+  theme(panel.grid=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y = element_text(face='bold',
+                                 size=12),
+        axis.text.x = element_text(face='bold')) +
+  labs(title='Categorical Ranking with ROC-AUC') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+df_ind %>%
+  filter(Pseudo=='No Pseudo') %>%
+  mutate(Rating=cut(Rank, breaks=c(-Inf,3.5,5.5,Inf), labels=c('Good','Intermediate','Poor'))) %>%
+  ggplot() + aes(dataset, model, col='A', fill=Rating) +
+  geom_point(shape=22, size=10) + facet_grid(. ~ class) +
+  guides(col=FALSE) +
+  scale_color_manual(values = '#000000') + 
+  scale_fill_manual(values=c('#1E4160','#007C92','#F3FF82')) + 
+  theme(panel.grid=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y = element_text(face='bold',
+                                 size=12),
+        axis.text.x = element_text(face='bold')) +
+  labs(title='Categorical Ranking with ROC-AUC') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+```
+
+```{r}
+df_ind %>%
+  filter(Pseudo=='No Pseudo') %>%
+  mutate(Rating=cut(Rank_pr, breaks=c(-Inf,3.5,5.5,Inf), labels=c('Good','Intermediate','Poor'))) %>%
+  ggplot() + aes(dataset, model, col='A', fill=Rating) +
+  geom_point(shape=22, size=10) + facet_grid(. ~ class) +
+  guides(col=FALSE) +
+  scale_color_manual(values = '#000000') + 
+  scale_fill_manual(values=c('#1E4160','#007C92','#F3FF82')) + 
+  theme(panel.grid=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y = element_text(face='bold',
+                                 size=12),
+        axis.text.x = element_text(face='bold')) +
+  labs(title='Categorical Ranking with PR-AUC') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+df_ind %>%
+  filter(Pseudo=='Pseudo') %>%
+  mutate(Rating=cut(Rank_pr, breaks=c(-Inf,3.5,5.5,Inf), labels=c('Good','Intermediate','Poor'))) %>%
+  ggplot() + aes(dataset, model, col='A', fill=Rating) +
+  geom_point(shape=22, size=10) + facet_grid(. ~ class) +
+  guides(col=FALSE) +
+  scale_color_manual(values = '#000000') + 
+  scale_fill_manual(values=c('#1E4160','#007C92','#F3FF82')) + 
+  theme(panel.grid=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y = element_text(face='bold',
+                                 size=12),
+        axis.text.x = element_text(face='bold')) +
+  labs(title='Categorical Ranking with PR-AUC') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1),
+        legend.position = 'bottom')
+```
+
+
+# 3 - Comparison: Ensemble
+```{r}
+df_ens = df_all %>%
+  filter(Ensemble == 'Ensemble')
+```
+
+## Model Comparison
+```{r}
+df_ens %>%
+  ggplot() + aes(dataset,auc,col=model,label=Label) +
+  geom_point() + geom_text(hjust=1, vjust=-0.4, size=3) + coord_flip() +
+  labs(title='Model performance(ROC-AUC)') +
+  facet_grid(Pseudo ~ class) + 
+  labs(x='Datasets', y='ROC-AUC')  + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14))
+
+df_ens %>%
+  ggplot() + aes(dataset,auc_pr,col=model,label=Label_pr) +
+  geom_point() + geom_text(hjust=1, vjust=-0.4, size=3) + coord_flip() +
+  labs(title='Model performance (PR-AUC)') +
+  facet_grid(Pseudo ~ class) + 
+  labs(x='Datasets', y='PR-AUC')  + 
+    theme(strip.text = element_text(face="bold", size=20),
+          axis.text.x = element_text(size=16),
+          axis.text.y = element_text(size=11),
+          axis.title.x = element_text(size=16),
+          axis.title.y = element_text(size=12),
+          plot.title = element_text(size=14),
+          legend.position='bottom')
+```
+
+
+## Frequency of Models
+```{r}
+df_ens %>%
+  filter(Performance_pr == 'Best') %>%
+  group_by(class, model, Pseudo) %>%
+  summarise(Frequency=n()) %>%
+  ungroup() %>%
+  group_by(class, Pseudo) %>%
+  arrange(class, Pseudo, desc(Frequency)) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Frequency, fill=model) + 
+  geom_col() + facet_grid(class ~ Pseudo) +
+  labs(x='', fill='Models', title='Frequency of models with highest ROC-AUC for a dataset') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text.y = element_text(size=12),
+        axis.title.y = element_text(size=8)) 
+
+df_ens %>%
+  filter(Performance_pr == 'Best') %>%
+  group_by(class, model, Pseudo) %>%
+  summarise(Frequency=n()) %>%
+  ungroup() %>%
+  group_by(class, Pseudo) %>%
+  arrange(class, Pseudo, desc(Frequency)) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Frequency, fill=model) + 
+  geom_col() + facet_grid(Pseudo ~ class) +
+  labs(x='', fill='Models', title='Frequency of models with highest PR-AUC for a dataset') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text.y = element_text(size=12),
+        axis.title.y = element_text(size=8)) 
+```
+```{r}
+unique(df_ens$model)
+```
+
+## Average Rank
+```{r}
+df_ens %>%
+  group_by(class,model,Pseudo) %>%
+  summarise(AUC=mean(auc),Rank=mean(Rank)) %>%
+  ungroup() %>%
+  group_by(class,Pseudo) %>%
+  arrange(class, Pseudo, Rank) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Rank, fill=model) + 
+  geom_col() + facet_grid(Pseudo ~ class) + 
+  ggtitle('Average rank over every dataset by class (ROC-AUC)') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(x='', y='Average Rank', fill='Models') 
+```
+
+```{r}
+df_ens %>%
+  group_by(class,model,Pseudo) %>%
+  summarise(AUC=mean(auc_pr),Rank=mean(Rank)) %>%
+  ungroup() %>%
+  group_by(class,Pseudo) %>%
+  arrange(class, Pseudo, Rank) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Rank, fill=model) + 
+  geom_col() + facet_grid(Pseudo ~ class) + 
+  ggtitle('Average rank over every dataset by class (PR-AUC)') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(x='', y='Average Rank', fill='Models') 
+```
+
+## Frequency of Top 3
+```{r}
+df_ens %>%
+  filter(Rank <= 3) %>%
+  group_by(class,dataset,Pseudo) %>%
+  summarise(Difference=max(auc)-min(auc)) %>%
+  ggplot() + aes(Difference) + geom_histogram()
+```
+
+
+```{r}
+df_ens %>%
+  filter(Rank <= 3) %>%
+  group_by(class, model, Pseudo) %>%
+  summarise(Frequency=n()) %>%
+  ungroup() %>%
+  group_by(class, Pseudo) %>%
+  arrange(class, Pseudo, desc(Frequency)) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Frequency, fill=model) + 
+  geom_col() + facet_grid(class ~ Pseudo) +
+  labs(x='', fill='Models', title='Frequency of top 3 models with highest ROC-AUC for a dataset') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) 
+  
+```
+
+```{r}
+df_ens %>%
+  filter(Rank_pr <= 3) %>%
+  group_by(class, model, Pseudo) %>%
+  summarise(Frequency=n()) %>%
+  ungroup() %>%
+  group_by(class, Pseudo) %>%
+  arrange(class, Pseudo, desc(Frequency)) %>%
+  mutate(Order=row_number()) %>%
+  ggplot() + aes(Order, Frequency, fill=model) + 
+  geom_col() + facet_grid(class ~ Pseudo) +
+  labs(x='', fill='Models', title='Frequency of top 3 models with highest PR-AUC for a dataset') +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) 
+```
+
+```{r}
+df_ens %>%
+  filter(Pseudo=='Pseudo') %>%
+  mutate(Rating=cut(Rank, breaks=c(-Inf,3.5,5.5,Inf), labels=c('Good','Intermediate','Poor'))) %>%
+  ggplot() + aes(dataset, model, col='A', fill=Rating) +
+  geom_point(shape=22, size=10) + facet_grid(. ~ class) +
+  guides(col=FALSE) +
+  scale_color_manual(values = '#000000') + 
+  scale_fill_manual(values=c('#1E4160','#007C92','#F3FF82')) + 
+  theme(panel.grid=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y = element_text(face='bold',
+                                 size=12),
+        axis.text.x = element_text(face='bold')) +
+  labs(title='Categorical Ranking with ROC-AUC') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+df_ens %>%
+  filter(Pseudo=='No Pseudo') %>%
+  mutate(Rating=cut(Rank, breaks=c(-Inf,3.5,5.5,Inf), labels=c('Good','Intermediate','Poor'))) %>%
+  ggplot() + aes(dataset, model, col='A', fill=Rating) +
+  geom_point(shape=22, size=10) + facet_grid(. ~ class) +
+  guides(col=FALSE) +
+  scale_color_manual(values = '#000000') + 
+  scale_fill_manual(values=c('#1E4160','#007C92','#F3FF82')) + 
+  theme(panel.grid=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y = element_text(face='bold',
+                                 size=12),
+        axis.text.x = element_text(face='bold')) +
+  labs(title='Categorical Ranking with ROC-AUC') + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+```
+
+
+# Wilcoxon
+
+```{r}
+df_stat = NULL
+models = c('KNN','SVM', 'RF','NB','XG','LR','SS')
+classes = c('MAPK1', 'MTOR')
+target = 'DNN'
+
+df_snapen = df_all %>%
+  filter(Pseudo=='Pseudo',
+         Ensemble=='Individual')
+
+for (cls in classes) {
+  for (mod in models) {
+    x=df_snapen %>%
+        filter(class==cls,
+               model==target) %>%
+        arrange(dataset) %>%
+        pull(auc)
+    y=df_snapen %>%
+        filter(class==cls,
+               model==mod) %>%
+        arrange(dataset) %>%
+        pull(auc)
+    
+    x_pr=df_snapen %>%
+      filter(class==cls,
+             model==target) %>%
+      arrange(dataset) %>%
+      pull(auc_pr)
+    
+    y_pr=df_snapen %>%
+        filter(class==cls,
+               model==mod) %>%
+        arrange(dataset) %>%
+        pull(auc_pr)
+    
+    df_stat = data.frame(Model=mod, Class=cls,
+                       p=wilcox.test(x,y,paired = TRUE, alternative = 'greater')$p.value,
+                       p_pr=wilcox.test(x_pr,y_pr,paired = TRUE, alternative = 'greater')$p.value) %>%
+      rbind(df_stat)
+  }
+}
+
+grid.newpage()
+
+experi = df_stat %>%
+  select(Model,Class,p) %>%
+  pivot_wider(names_from=Class,values_from=p) %>%
+  ungroup() %>%
+  select(Model, MAPK1, MTOR) %>%
+  mutate(MAPK1=round(MAPK1,4), MTOR=round(MTOR,4)) %>%
+  column_to_rownames(., var='Model') 
+
+cols = matrix(0,nrow = nrow(experi), ncol=ncol(experi)) 
+cols[experi > 0.05] = 'black'
+cols[experi < 0.05] = 'red'
+tt <- ttheme_default(core=list(fg_params = list(col = cols),
+                                bg_params = list(col=NA)),
+                      rowhead=list(bg_params = list(col=NA)),
+                      colhead=list(bg_params = list(col=NA)))
+tab = experi %>%
+  tableGrob(col=c('MAPK1', 'MTOR'), theme=tt) 
+grid.draw(tab)
+
+ggsave(filename='./Figs/ROCSig.pdf',
+       plot=tab)
+
+experi = df_stat %>%
+  select(Model,Class,p) %>%
+  pivot_wider(names_from=Class,values_from=p) %>%
+  ungroup() %>%
+  mutate(MAPK1=p.adjust(MAPK1, method='fdr'), MTOR=p.adjust(MTOR, method='fdr')) %>%
+  select(Model, MAPK1, MTOR) %>%
+  mutate(MAPK1=round(MAPK1,4), MTOR=round(MTOR,4)) %>%
+  column_to_rownames(., var='Model') 
+
+cols = matrix(0,nrow = nrow(experi), ncol=ncol(experi)) 
+cols[experi > 0.05] = 'black'
+cols[experi < 0.05] = 'red'
+tt <- ttheme_default(core=list(fg_params = list(col = cols),
+                                bg_params = list(col=NA)),
+                      rowhead=list(bg_params = list(col=NA)),
+                      colhead=list(bg_params = list(col=NA)))
+tab = experi %>%
+  tableGrob(col=c('MAPK1', 'MTOR'), theme=tt) 
+ggsave(filename='./Figs/ROCSigAdj.pdf',
+       plot=tab)
+
+grid.newpage()
+
+experi = df_stat %>%
+  select(Model,Class,p_pr) %>%
+  pivot_wider(names_from=Class,values_from=p_pr) %>%
+  ungroup() %>%
+  select(Model, MAPK1, MTOR) %>%
+  mutate(MAPK1=round(MAPK1,4), MTOR=round(MTOR,4)) %>%
+  column_to_rownames(., var='Model') 
+
+cols = matrix(0,nrow = nrow(experi), ncol=ncol(experi)) 
+cols[experi > 0.05] = 'black'
+cols[experi < 0.05] = 'red'
+tt <- ttheme_default(core=list(fg_params = list(col = cols),
+                                bg_params = list(col=NA)),
+                      rowhead=list(bg_params = list(col=NA)),
+                      colhead=list(bg_params = list(col=NA)))
+tab = experi %>%
+  tableGrob(col=c('MAPK1', 'MTOR'), theme=tt) 
+
+grid.draw(tab)
+
+ggsave(filename='./Figs/PRSig.pdf',
+       plot=tab)
+
+experi = df_stat %>%
+  select(Model,Class,p_pr) %>%
+  pivot_wider(names_from=Class,values_from=p_pr) %>%
+  ungroup() %>%
+  mutate(MAPK1=p.adjust(MAPK1, method='fdr'), MTOR=p.adjust(MTOR, method='fdr')) %>%
+  select(Model, MAPK1, MTOR) %>%
+  mutate(MAPK1=round(MAPK1,4), MTOR=round(MTOR,4)) %>%
+  column_to_rownames(., var='Model') 
+
+cols = matrix(0,nrow = nrow(experi), ncol=ncol(experi)) 
+cols[experi > 0.05] = 'black'
+cols[experi < 0.05] = 'red'
+tt <- ttheme_default(core=list(fg_params = list(col = cols),
+                                bg_params = list(col=NA)),
+                      rowhead=list(bg_params = list(col=NA)),
+                      colhead=list(bg_params = list(col=NA)))
+tab = experi %>%
+  tableGrob(col=c('MAPK1', 'MTOR'), theme=tt) 
+ggsave(filename='./Figs/PRSigAdj.pdf',
+       plot=tab)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,10 @@
+train_fp=Example_Data/Example_ESC_MTOR_train.csv
+test_fp=Example_Data/Example_ESC_MTOR_test.csv
+save_dir=Example_Data
+save_test_name=predictions.csv
+verbose=1
+num_layers=3
+num_snapshots=10
+num_epochs=150
+batch_size=32
+learning_rate=0.01

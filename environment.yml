@@ -1,0 +1,7 @@
+name: SnapKin
+dependencies:
+  - python>=3.6
+  - numpy
+  - pandas
+  - pip:
+    - tensorflow-gpu

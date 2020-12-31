@@ -1,0 +1,161 @@
+---
+title: "Checerrk"
+author: '470414095'
+date: "18/11/2020"
+output: html_document
+---
+
+
+```{r include=FALSE }
+# Packages
+library(MESS)
+library(pROC)
+library(PRROC)
+library(kableExtra)
+library(tidyverse)
+library(grid)
+library(gridExtra)
+options(dplyr.summarise.inform = FALSE)
+select = dplyr::select
+slice = dplyr::slice
+```
+
+# Parameters
+```{r}
+data_file = './Results-New.RData'
+models = c('KNN','SVM', 'RF','NB','XG','LR')
+dl = c('DNN', 'SnapKin')
+filtered = 'Unfiltered'  
+save_plot = FALSE
+load(data_file)
+```
+
+```{r}
+df_auc %>%
+  pull(model) %>%
+  unique()
+```
+
+```{r}
+df_auc %>%
+  filter(model=='Snapkin',
+         grepl('100',condition)) %>%
+  group_by(condition) %>%
+  summarise(c=n())
+```
+
+
+```{r}
+datasets = c('C2C12', 'ESC', 'MLC', 'NBC', 'L1-I', 'L1-F', 'L1-R', 'L6')
+
+# Renaming and additional columns
+df_all = df_auc %>%
+  filter(LabelType==filtered)%>%
+  mutate(Ensemble=ifelse(Ensemble,'Ensemble','Individual')) %>%
+  filter(dataset %in% datasets) %>%
+  select(auc, auc_pr, model, class, dataset, Pseudo, Ensemble, LabelType,condition) %>%
+  group_by(dataset, class, Pseudo, Ensemble) %>%
+  mutate(Rank=rank(-auc, ties.method='min'),
+         Size=rank(auc, ties.method='max'),
+         Performance=ifelse(auc==max(auc), 'Best', 'Not Best'),
+         Label=ifelse(auc==max(auc),model,''),
+         Performance_pr=ifelse(auc_pr==max(auc_pr), 'Best', 'Not Best'),
+         Rank_pr=rank(-auc_pr, ties.method='min'),
+         Label_pr=ifelse(auc_pr==max(auc_pr),model,'')) %>%
+    ungroup()  
+```
+
+```{r}
+df_all %>%
+  filter(model!='Snapkin' | grepl('100',condition))
+```
+
+
+
+```{r}
+df_snap = df_auc %>%
+  filter(model!='Snapkin' | grepl('100',condition))%>%
+  filter(!Ensemble,
+         Pseudo=='Pseudo') %>%
+  select(auc, auc_pr, model, class, dataset) %>%
+  group_by(dataset, class) %>%
+  mutate(IsTop=ifelse(auc==max(auc), 'Best', 'Not Best'),
+         Rank=rank(auc)) %>%
+  mutate(IsTop=as.factor(IsTop),
+         Rank=rank(-auc, ties.method='min'),
+         Size=rank(auc, ties.method='max'),
+         Performance=ifelse(auc==max(auc), 'Best', 'Not Best'),
+         Label=ifelse(Performance=='Best',model,''),
+         Performance_pr=ifelse(auc_pr==max(auc_pr), 'Best', 'Not Best'),
+         Rank_pr=rank(-auc_pr, ties.method='min'),
+         Label_pr=ifelse(Performance_pr=='Best',model,''))
+```
+
+
+```{r}
+df_snap %>%
+  ggplot() + aes(dataset,auc_pr,col=model,label=Label_pr) +
+  geom_point() + geom_text(hjust=1, vjust=-0.5) + coord_flip() +
+  labs(title='Model Performance Overview for MTOR by Dataset ROC') + 
+  facet_grid(class ~ .)
+```
+
+```{r}
+df_snap = df_auc %>% 
+  filter(Ensemble|model=='Snapkin',
+         Pseudo=='Pseudo') %>%
+  select(auc, auc_pr, model, class, dataset) %>%
+  group_by(dataset, class) %>%
+  mutate(IsTop=ifelse(auc==max(auc), 'Best', 'Not Best'),
+         Rank=rank(auc)) %>%
+  mutate(IsTop=as.factor(IsTop),
+         Rank=rank(-auc, ties.method='min'),
+         Size=rank(auc, ties.method='max'),
+         Performance=ifelse(auc==max(auc), 'Best', 'Not Best'),
+         Label=ifelse(Performance=='Best',model,''),
+         Performance_pr=ifelse(auc_pr==max(auc_pr), 'Best', 'Not Best'),
+         Rank_pr=rank(-auc_pr, ties.method='min'),
+         Label_pr=ifelse(Performance_pr=='Best',model,''))
+```
+
+
+```{r}
+df_snap %>%
+  ggplot() + aes(dataset,auc_pr,col=model,label=Label_pr) +
+  geom_point() + geom_text(hjust=1, vjust=-0.5) + coord_flip() +
+  labs(title='Model Performance Overview for MTOR by Dataset ROC') + 
+  facet_grid(class ~ .)
+```
+
+```{r}
+df_snap %>%
+  filter(model=='Snapshot')
+```
+
+
+
+
+
+```{r}
+unique(df_snap$model)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

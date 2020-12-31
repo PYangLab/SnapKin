@@ -1,0 +1,327 @@
+---
+title: "Results Preprocessing"
+output: html_document
+    toc: true
+---
+
+```{r, include=FALSE}
+# Packages
+source('../Helpers/Measures.R')
+library(MESS)
+library(pROC)
+library(PRROC)
+library(kableExtra)
+library(tidyverse)
+options(dplyr.summarise.inform = FALSE)
+select = dplyr::select
+slice = dplyr::slice
+```
+
+```{r}
+# Parameters
+## Model Parameters
+models = c('KNN','SVM', 'RF','NB','XG','LR')
+DL_models = c('DNN','SnapKin')
+datasets = c('C2C12', 'ESC', 'MLC', 'NBC', 'L1-I', 'L1-F', 'L1-R', 'L6')
+classes = c('MAPK1', 'MTOR')
+# File Parameters
+data_dirs = c('Multi-Populated-Unfiltered', 'Multi-Populated-Unfiltered-NoPseudo',
+              'Multi-Populated-Unfiltered-Ensemble', 'Multi-Populated-Unfiltered-NoPseudo-Ensemble')
+data_dirs = c('Data-50', 'Data-50-NoPseudo', 'Data-50-Ensemble', 'Data-50-NoPseudo-Ensemble')
+num_folds = 5
+## Storage variables
+df_measures = df_auc = df_individual_auc = df_fit_auc = df_roc = df_pr = df_pr_fit = df_params = NULL
+```
+
+```{r}
+f = paste('F', 1:num_folds, sep='')
+fold_labels = paste(rep(f,each=5), 1:5)
+
+```
+
+
+```{r, echo=FALSE, warning=FALSE}
+ovrll = Sys.time()
+
+# Traditional Individual Approach
+for (data_dir in data_dirs) {
+  for (model in models) {
+    for (class in classes) {
+      for (dataset in datasets) {
+        data_fp = paste('../Models/', 'Traditional','/', data_dir, '/', model, '_', dataset, '_', class,'.RData', sep='')
+        if (!file.exists(data_fp)) {
+          # print(data_fp)
+          next;
+        }
+        load(data_fp)
+        
+        # Precision-recall values
+        tmp_pr = precisionRecall(out$preds)
+        # PR- Curve
+        df_pr = cbind(tmp_pr$curv,model=model,class=class,
+                      dataset=dataset, condition=data_dir) %>%
+          rbind(df_pr)
+        ## PR - AUC
+        df_pr_fit = data.frame(auc=MESS::auc(df_pr$Recall, df_pr$Precision), model=model, 
+                                class=class, dataset=dataset, condition=data_dir) %>%
+          rbind(df_fit_auc)
+        
+        # AUC Value
+        df_auc = data.frame(auc=mean(unlist(out$aucs)),
+                            auc_sd=sd(unlist(out$aucs)),
+                            model=model, class=class, dataset=dataset,
+                            condition=data_dir,
+                            auc_pr=tmp_pr$mean,
+                            auc_pr_sd=tmp_pr$sd) %>%
+          rbind(df_auc)
+        
+        # Individual AUC
+        df_individual_auc = data.frame(roc=unlist(out$aucs),
+                                       pr=tmp_pr$pr,
+                                       fold=fold_labels,
+                                       model=model, class=class, dataset=dataset,
+                            condition=data_dir) %>%
+          rbind(df_individual_auc)
+        
+        # Sensitivity, Specificity, F1
+        tmp_measures = otherMeasures(out$preds)
+        df_measures = data.frame(sensitivity=tmp_measures$sensitivity,
+                                 sensitivity_sd=tmp_measures$sensitivity_sd,
+                                 specificity=tmp_measures$specificity,
+                                 specificity_sd=tmp_measures$specificity_sd,
+                                 f1=tmp_measures$f1,
+                                 f1_sd=tmp_measures$f1,
+                                 model=model, class=class, dataset=dataset,
+                                 condition=data_dir) %>%
+          rbind(df_measures)
+        
+        # ROC Curve
+        roc_fits = NULL
+        folds = out$roc_curve %>% pull(fold) %>% unique()
+        for (fld_set in 1:num_folds) {
+          for (fld in folds) {
+            tmp_roc = out$roc_curve %>%
+              filter(fold_set==fld_set, fold==fld) %>%
+              select(fpr,tpr) %>%
+              arrange(fpr)
+        
+            fit = fit_ROC(tmp_roc$fpr, tmp_roc$tpr)
+            roc_fits = data.frame(fpr=fit$fpr, tpr=fit$tpr, iteration=paste(fld_set, fld)) %>%
+              rbind(roc_fits)
+          }
+        }
+        ## ROC Curve: Average by FPR
+        roc_avg = roc_fits %>% 
+          group_by(fpr) %>%
+          summarise(tpr=mean(tpr)) %>%
+          mutate(model=model, class=class, dataset=dataset, condition=data_dir) 
+        df_roc = roc_avg %>%
+          rbind(df_roc)
+        
+        ## ROC AUC
+        df_fit_auc = data.frame(auc=MESS::auc(roc_avg$fpr, roc_avg$tpr), model=model, 
+                                class=class, dataset=dataset, condition=data_dir) %>%
+          rbind(df_fit_auc)
+      }
+    }
+  }
+}
+
+# Deep Learning Individual Approach
+for (data_dir in data_dirs) {
+  for (model in DL_models) {
+    data_fp = paste('../Models/',model,'/',data_dir,'/',model,'-preds.csv', sep='')
+    if (!file.exists(data_fp)) {
+        next;
+    }
+    param_fp = paste('../Models/',model,'/',data_dir,'/',model,'-params.csv', sep='')
+    if (file.exists(param_fp)) {
+        df_params = rbind(df_params, read_csv(param_fp, col_types = cols()))
+    }
+    
+    tmp_preds = read_csv(data_fp, col_types = cols())
+    for (dataset in datasets) {
+      for (class in classes) {
+        folds = tmp_preds %>%
+          filter(Dataset==dataset, Class==class) %>% 
+          pull(Fold) %>% unique()
+        fold_sets = tmp_preds %>%
+          filter(Dataset==dataset, Class==class) %>% 
+          pull(Fold_Set) %>% unique()
+        tmp_aucs = tmp_prs = NULL
+        roc_fits = pr_fits = NULL
+        
+        tmp_sens = tmp_spec = tmp_f1 = NULL
+        curv = NULL
+        
+        for (fld_set in fold_sets) {
+          for (fld in folds) {
+            tmp_df = tmp_preds %>%
+              filter(Fold_Set==fld_set, Fold==fld, Dataset==dataset, Class==class)
+            
+            ## Fit ROC
+            y_pred = tmp_df$Score
+            y_true = tmp_df$Label
+            
+            TP = sum(y_pred[y_true == 1] >= 0.5)
+            FN = sum(y_pred[y_true == 1] < 0.5)
+            TN = sum(y_pred[y_true == 0] < 0.5)
+            FP = sum(y_pred[y_true == 0] >= 0.5)
+            
+            tmp_sens = c(tmp_sens, TP/(TP + FN))
+            tmp_spec = c(tmp_spec, TN/(TN + FN))
+            tmp_f1 = c(tmp_f1, 2*TP/(2*TP + FP + FN))
+            
+            roc_obj = roc(y_true, y_pred, quiet = TRUE)
+            fit = fit_ROC(rev(1-roc_obj$specificities), rev(roc_obj$sensitivities))
+            roc_fits = data.frame(fpr=fit$fpr, tpr=fit$tpr, iteration=paste(fld_set, fld)) %>%
+                        rbind(roc_fits)
+            ## Store AUC
+            tmp_aucs = c(tmp_aucs, roc_obj$auc[1])
+            
+            ## Compute PR
+            pr_stuff = pr.curve(scores.class0=y_pred[y_true == 1], 
+                                scores.class1=y_pred[y_true == 0])
+            tmp_prs = c(tmp_prs, pr_stuff$auc.integral)
+            
+            curv = compute_precrec(y_pred[y_true == 1],y_pred[y_true == 0]) %>%
+                rbind(curv)
+          }
+        }
+        if (is.null(tmp_aucs)) {
+          # print(paste(data_fp, dataset, class))
+          next
+        }
+        ## Average PR Curve
+        curv= curv %>%
+          group_by(Threshold) %>%
+          summarise(Recall=mean(Recall),
+                    Precision=mean(Precision)) %>%
+          arrange(desc(Precision))
+        
+        # PR- Curve
+        df_pr = cbind(curv,model=model,class=class,
+                      dataset=dataset, condition=data_dir) %>%
+          rbind(df_pr)
+        ## PR - AUC
+        df_pr_fit = data.frame(auc=MESS::auc(df_pr$Recall, df_pr$Precision), model=model, 
+                                class=class, dataset=dataset, condition=data_dir) %>%
+          rbind(df_fit_auc)
+        
+        # AUC Value
+        df_auc = data.frame(auc=mean(tmp_aucs),
+                            auc_sd=sd(tmp_aucs),
+                            model=model, class=class, dataset=dataset,
+                            condition=data_dir,
+                            auc_pr=mean(tmp_prs),
+                            auc_pr_sd=sd(tmp_prs)) %>%
+            rbind(df_auc)
+        
+        # Individual AUC
+        df_individual_auc = data.frame(roc=tmp_aucs,
+                                       pr=tmp_prs,
+                                       fold=fold_labels,
+                                       model=model, class=class, dataset=dataset,
+                            condition=data_dir) %>%
+          rbind(df_individual_auc)
+        
+        # Sensitivity, Specificity, F1
+        df_measures = data.frame(sensitivity=mean(tmp_sens),
+                                 sensitivity_sd=sd(tmp_sens),
+                                 specificity=mean(tmp_spec),
+                                 specificity_sd=sd(tmp_spec),
+                                 f1=mean(tmp_f1),
+                                 f1_sd=sd(tmp_f1),
+                                 model=model, class=class, dataset=dataset,
+                                 condition=data_dir) %>%
+          rbind(df_measures)
+        
+        # ROC Curve: Average by FPR
+        roc_avg = roc_fits %>% 
+          group_by(fpr) %>%
+          summarise(tpr=mean(tpr)) %>%
+          mutate(model=model, class=class, dataset=dataset, condition=data_dir) 
+        df_roc = roc_avg %>%
+          rbind(df_roc)
+        
+        # ROC AUC
+        df_fit_auc = data.frame(auc=MESS::auc(roc_avg$fpr, roc_avg$tpr), 
+                                model=model, class=class, dataset=dataset,
+                                condition=data_dir) %>%
+          rbind(df_fit_auc)
+      }
+    }
+  }
+} 
+
+df_auc = df_auc %>%
+  mutate(Ensemble=ifelse(grepl('Ensemble',model) | grepl('Ensemble', condition), TRUE, FALSE),
+         Pseudo=ifelse(grepl('NoPseudo',condition), 'No Pseudo','Pseudo'),
+         MultiData=FALSE) 
+
+df_individual_auc = df_individual_auc %>%
+  mutate(Ensemble=ifelse(grepl('Ensemble',model) | grepl('Ensemble', condition), TRUE, FALSE),
+         Pseudo=ifelse(grepl('NoPseudo',condition), 'No Pseudo','Pseudo'),
+         MultiData=FALSE) 
+
+
+end_time = Sys.time() - ovrll
+print(end_time)
+```
+
+```{r}
+save_name = './Results-Graphs-50.RData'
+
+# Save
+save(df_auc, # AUC values and variances
+     df_fit_auc, # ROC-AUC value for auc plots
+     df_pr_fit,  # PR-AUC values for pr plot 
+     df_measures, # Sensitivy and stuff 
+     df_roc,   # ROC curve info 
+     df_pr,    # PR curve info 
+     df_params,# DL parameters
+     df_individual_auc, # Individual AUCs for PR and ROC
+     file=save_name)
+```
+
+```{r}
+## 42 for Individual : 18 Filtered and 24 Unfiltered
+## 314 for MultiData  : 6 Filtered and 8 Unfiltered
+df_auc %>%
+    group_by(model, class) %>%
+    summarise(count=n())
+```
+
+
+```{r}
+df_auc %>%
+    group_by(model, class) %>%
+    summarise(count=n())
+```
+
+```{r}
+df_auc %>%
+    group_by(model, class) %>%
+    summarise(count=n())
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

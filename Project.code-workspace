@@ -1,0 +1,55 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"cSpell.words": [
+			"ANOVA",
+			"AUCs",
+			"Dyna",
+			"Geddes",
+			"HPRD",
+			"KSIBW",
+			"MAPK",
+			"MTOR",
+			"Networ",
+			"PHOSIDA",
+			"PRKACA",
+			"PRROC",
+			"PSSM",
+			"PUEL",
+			"Pengyi",
+			"Phinder",
+			"Phospho",
+			"Phosphopedia",
+			"Relu",
+			"SILAC",
+			"TKL's",
+			"Tensorflow",
+			"cofactors",
+			"discrim",
+			"ensembling",
+			"glycosylation",
+			"immunochemical",
+			"kinase's",
+			"kinases",
+			"mitogen",
+			"multidata",
+			"normalised",
+			"normalising",
+			"overfit",
+			"phos",
+			"phosphorylate",
+			"phosphorylating",
+			"phosphosite",
+			"rapamycin",
+			"subsampled",
+			"subsamples",
+			"tidymodel",
+			"triphosphate",
+			"xgboost"
+		]
+	}
+}

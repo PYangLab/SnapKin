@@ -1,0 +1,340 @@
+`---
+title: "ToExcel"
+author: '470414095'
+date: "18/11/2020"
+output: html_document
+---
+
+```{r, include=FALSE}
+# Packages
+source('../Helpers/Measures.R')
+library(MESS)
+library(pROC)
+library(PRROC)
+library(kableExtra)
+library(tidyverse)
+options(dplyr.summarise.inform = FALSE)
+select = dplyr::select
+slice = dplyr::slice
+
+require('foreach')
+require('doParallel')
+registerDoParallel(cores=detectCores())
+```
+
+```{r}
+models = c('KNN','SVM', 'RF','NB','XG','LR')
+DL_models = c('DNN')
+snapkin = c('SnapKin')
+datasets = c('C2C12', 'ESC', 'MLC', 'NBC', 'L1-I', 'L1-F', 'L1-R', 'L6')
+classes = c('MAPK1', 'MTOR')
+
+
+# models = 'KNN'
+# DL_models = NULL 
+num_folds = 5
+data_dirs = c('Multi-Populated-Unfiltered', 'Multi-Populated-Unfiltered-NoPseudo',
+              'Multi-Populated-Unfiltered-Ensemble','Multi-Populated-Unfiltered-NoPseudo-Ensemble')
+
+
+data_dirs = c('Data-50', 'Data-50-NoPseudo', 'Data-50-Ensemble', 'Data-50-NoPseudo-Ensemble')
+f = paste('F', 1:num_folds, sep='')
+fold_labels = paste(rep(f,each=5), 1:5)
+
+save_name = './Results-Folds-50.RData'
+```
+
+```{r}
+df_full = NULL     # Probabilities 
+df_foldsets = NULL # AUCs by Foldset
+df_folds = NULL    # AUCs by Folds
+```
+
+
+```{r}
+# Traditional Individual Approach
+trad_list = foreach (data_dir=data_dirs) %:%
+  foreach (model=models) %:%
+    foreach (class=classes) %:%
+      foreach (dataset=datasets) %dopar% {
+        df_full = NULL     # Probabilities 
+        df_foldsets = NULL # AUCs by Foldset
+        df_folds = NULL    # AUCs by Folds
+        data_fp = paste('../Models/', 'Traditional','/', data_dir, '/', model, '_', dataset, '_', class,'.RData', sep='')
+        if (!file.exists(data_fp)) {
+          # print(data_fp)
+          return (data_fp);
+        }
+        load(data_fp)
+        preds = out$preds
+        for (foldset in 1:length(preds)) {
+          pos_fold = neg_fold = NULL
+          for (fold in 1:length(preds[[foldset]])) {
+            pos = preds[[foldset]][[fold]]$pred_pos
+            neg = preds[[foldset]][[fold]]$pred_neg 
+            
+            pos_fold = c(pos_fold,pos)
+            neg_fold = c(neg_fold,neg)
+            
+            y_true = c(rep(1,length(pos)), rep(0,length(neg)))
+            y_pred = c(pos, neg)
+            # AUCs
+            roc_obj = roc(y_true, y_pred, quiet = TRUE)
+            pr_stuff = pr.curve(scores.class0=pos, 
+                                scores.class1=neg)
+          
+            df_folds = data.frame(Model=model, Dataset=dataset, Class=class,
+                                  FoldSet=foldset,Fold=fold,Condition=data_dir,
+                                  ROC_AUC=roc_obj$auc[1],
+                                  PR_AUC=pr_stuff$auc.integral) %>%
+              rbind(df_folds)
+          }
+          
+          y_true = c(rep(1,length(pos_fold)), rep(0,length(neg_fold)))
+          y_pred = c(pos_fold, neg_fold)
+          
+          # AUCs
+          roc_obj = roc(y_true, y_pred, quiet = TRUE)
+          pr_stuff = pr.curve(scores.class0=pos_fold, 
+                              scores.class1=neg_fold)
+          
+          df_foldsets = data.frame(Model=model, Dataset=dataset, Class=class,
+                                   FoldSet=foldset,Condition=data_dir,
+                                   ROC_AUC=roc_obj$auc,
+                                   PR_AUC=pr_stuff$auc.integral) %>%
+            rbind(df_foldsets)
+        }
+        return(list(
+                    df_foldsets,
+                    df_folds))
+      }
+```
+
+```{r}
+# Deep Learning Individual Approach
+dl_list = foreach (data_dir=data_dirs) %:%
+  foreach (model=DL_models) %:%
+    foreach (dataset=datasets) %:%
+      foreach (class=classes) %dopar% {
+        df_full = NULL     # Probabilities 
+        df_foldsets = NULL # AUCs by Foldset
+        df_folds = NULL    # AUCs by Folds
+        data_fp = paste('../Models/',model,'/',data_dir,'/',model,'-preds.csv', sep='')
+        if (!file.exists(data_fp)) {
+            next;
+        }
+        tmp_preds = read_csv(data_fp, col_types = cols())
+        folds = tmp_preds %>%
+          filter(Dataset==dataset, Class==class) %>% 
+          pull(Fold) %>% unique()
+        fold_sets = tmp_preds %>%
+          filter(Dataset==dataset, Class==class) %>% 
+          pull(Fold_Set) %>% unique()
+        
+        for (foldset in fold_sets) {
+          pos_fold = neg_fold = NULL
+          for (fold in folds) {
+            tmp_df = tmp_preds %>%
+              filter(Fold_Set==foldset, Fold==fold, Dataset==dataset, Class==class)
+            
+            ## Fit ROC
+            y_pred = tmp_df$Score
+            y_true = tmp_df$Label
+            pos = y_pred[y_true == 1]
+            neg = y_pred[y_true == 0]
+            
+            pos_fold = c(pos_fold,pos)
+            neg_fold = c(neg_fold,neg)
+            
+            roc_obj = roc(y_true, y_pred, quiet = TRUE)
+            pr_stuff = pr.curve(scores.class0=y_pred[y_true == 1], 
+                                scores.class1=y_pred[y_true == 0])
+            
+            df_folds = data.frame(Model=model, Dataset=dataset, Class=class,
+                                  FoldSet=foldset,Fold=fold,Condition=data_dir,
+                                  ROC_AUC=roc_obj$auc[1],
+                                  PR_AUC=pr_stuff$auc.integral) %>%
+              rbind(df_folds)
+          }
+          y_true = c(rep(1,length(pos_fold)), rep(0,length(neg_fold)))
+          y_pred = c(pos_fold, neg_fold)
+          
+          # AUCs
+          roc_obj = roc(y_true, y_pred, quiet = TRUE)
+          pr_stuff = pr.curve(scores.class0=pos_fold, 
+                                          scores.class1=neg_fold)
+          
+          df_foldsets = data.frame(Model=model, Dataset=dataset, Class=class,
+                                   FoldSet=foldset,Condition=data_dir,
+                                   ROC_AUC=roc_obj$auc,
+                                   PR_AUC=pr_stuff$auc.integral) %>%
+            rbind(df_foldsets)
+        }
+        return(list(
+                    df_foldsets,
+                    df_folds))
+      }
+
+```
+
+```{r}
+# Deep Learning Individual Approach
+snap_list = foreach (data_dir=c('Data-50-Ensemble','Data-50-NoPseudo-Ensemble')) %:%
+  foreach (model=snapkin) %:%
+    foreach (dataset=datasets) %:%
+      foreach (class=classes) %dopar% {
+        df_full = NULL     # Probabilities 
+        df_foldsets = NULL # AUCs by Foldset
+        df_folds = NULL    # AUCs by Folds
+        data_fp = paste('../Models/',model,'/',data_dir,'/',model,'-preds.csv', sep='')
+        if (!file.exists(data_fp)) {
+            next;
+        }
+        tmp_preds = read_csv(data_fp, col_types = cols())
+        folds = tmp_preds %>%
+          filter(Dataset==dataset, Class==class) %>% 
+          pull(Fold) %>% unique()
+        fold_sets = tmp_preds %>%
+          filter(Dataset==dataset, Class==class) %>% 
+          pull(Fold_Set) %>% unique()
+        
+        for (foldset in fold_sets) {
+          pos_fold = neg_fold = NULL
+          for (fold in folds) {
+            tmp_df = tmp_preds %>%
+              filter(Fold_Set==foldset, Fold==fold, Dataset==dataset, Class==class)
+            
+            ## Fit ROC
+            y_pred = tmp_df$Score
+            y_true = tmp_df$Label
+            pos = y_pred[y_true == 1]
+            neg = y_pred[y_true == 0]
+            
+            pos_fold = c(pos_fold,pos)
+            neg_fold = c(neg_fold,neg)
+            
+            roc_obj = roc(y_true, y_pred, quiet = TRUE)
+            pr_stuff = pr.curve(scores.class0=y_pred[y_true == 1], 
+                                scores.class1=y_pred[y_true == 0])
+            
+            df_folds = data.frame(Model=model, Dataset=dataset, Class=class,
+                                  FoldSet=foldset,Fold=fold,Condition=data_dir,
+                                  ROC_AUC=roc_obj$auc[1],
+                                  PR_AUC=pr_stuff$auc.integral) %>%
+              rbind(df_folds)
+          }
+          y_true = c(rep(1,length(pos_fold)), rep(0,length(neg_fold)))
+          y_pred = c(pos_fold, neg_fold)
+          
+          # AUCs
+          roc_obj = roc(y_true, y_pred, quiet = TRUE)
+          pr_stuff = pr.curve(scores.class0=pos_fold, 
+                                          scores.class1=neg_fold)
+          
+          df_foldsets = data.frame(Model=model, Dataset=dataset, Class=class,
+                                   FoldSet=foldset,Condition=data_dir,
+                                   ROC_AUC=roc_obj$auc,
+                                   PR_AUC=pr_stuff$auc.integral) %>%
+            rbind(df_foldsets)
+        }
+        return(list(
+                    df_foldsets,
+                    df_folds))
+      }
+```
+
+```{r}
+## Combine Everything
+for (layer1 in trad_list) {
+  for (layer2 in layer1) {
+    for (layer3 in layer2) {
+      for (layer4 in layer3) {
+        if (typeof(layer4) == 'character') {
+          next
+        }
+        df_foldsets = rbind(layer4[[1]],df_foldsets)
+        df_folds = rbind(layer4[[2]],df_folds)
+      }
+    }
+  }
+}
+```
+
+```{r}
+## Combine Everything
+for (layer1 in dl_list) {
+  for (layer2 in layer1) {
+    for (layer3 in layer2) {
+      for (layer4 in layer3) {
+        df_foldsets = rbind(layer4[[1]],df_foldsets)
+        df_folds = rbind(layer4[[2]],df_folds)
+      }
+    }
+  }
+}
+```
+
+```{r}
+## Combine Everything
+for (layer1 in snap_list) {
+  for (layer2 in layer1) {
+    for (layer3 in layer2) {
+      for (layer4 in layer3) {
+        df_foldsets = rbind(layer4[[1]],df_foldsets)
+        df_folds = rbind(layer4[[2]],df_folds)
+      }
+    }
+  }
+}
+```
+
+```{r}
+df_foldsets = df_foldsets %>%
+  mutate(Ensemble=ifelse(grepl('Ensemble', Condition), 'Ensemble', 'Individual'),
+         Pseudo=ifelse(grepl('NoPseudo',Condition), 'No Pseudo','Pseudo')) %>%
+  select(-Condition)
+
+df_folds = df_folds %>%
+  mutate(Ensemble=ifelse(grepl('Ensemble', Condition), 'Ensemble', 'Individual'),
+         Pseudo=ifelse(grepl('NoPseudo',Condition), 'No Pseudo','Pseudo')) %>%
+  select(-Condition)
+```
+
+```{r}
+df_folds %>%
+  pull(Model) %>%
+  unique()
+```
+
+
+```{r}
+df_foldsets
+df_folds
+```
+
+
+```{r}
+save(save_name,
+     df_foldsets,
+     df_folds,
+     file=save_name)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

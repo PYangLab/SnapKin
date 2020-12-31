@@ -1,0 +1,71 @@
+---
+title: "Data_Summary"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+full_class_columns = c('y.MAPK1', 'y.MTOR')
+datasets = c('C2C12', 'ESC', 'MLC', 'NBC', 'L1-I', 'L1-F', 'L1-R', 'L6')
+data_fp = '../Data-Populated-Unfiltered/Data/'
+```
+
+
+```{r}
+df_summary = NULL
+for (dataset in datasets) {
+  fp = paste(data_fp, dataset, '.RData', sep='')
+  load(file=fp)
+  
+  row = c(dataset, dim(df)[1], dim(df)[2] - length(class_columns) - 1)
+  for (clss in full_class_columns) {
+    if (clss %in% class_columns) {
+      tmp = df %>%
+        pull(clss) %>%
+        sum()
+      row = c(row, tmp)
+    }
+    else {
+      row = c(row, 0)
+    }
+  }
+  df_summary = rbind(df_summary, row)
+}
+colnames(df_summary) = c('Dataset', 'Observations', 'Features', gsub('y.','',full_class_columns))
+rownames(df_summary) = NULL
+```
+
+```{r}
+df_summary %>%
+  data.frame() 
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

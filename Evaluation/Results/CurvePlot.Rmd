@@ -1,0 +1,87 @@
+---
+title: "CurvePlots"
+output: html_document
+---
+
+```{r include=FALSE }
+# Packages
+library(MESS)
+library(pROC)
+library(PRROC)
+library(kableExtra)
+library(tidyverse)
+library(grid)
+library(gridExtra)
+options(dplyr.summarise.inform = FALSE)
+select = dplyr::select
+slice = dplyr::slice
+```
+
+# Parameters
+```{r}
+data_file = './Results-Paper.RData'
+models = c('KNN','SVM', 'RF','NB','XG','LR')
+dl = c('DNN', 'SnapKin')
+filtered = 'Unfiltered'  
+save_plot = FALSE
+load(data_file)
+```
+
+# KNN
+
+```{r}
+df_roc %>%
+  mutate(Ensemble=ifelse(grepl('Ensemble',model) | grepl('Ensemble', condition), TRUE, FALSE),
+         Pseudo=ifelse(grepl('NoPseudo',condition), 'No Pseudo','Pseudo'),
+         LabelType=ifelse(grepl('Unfiltered',condition), 'Unfiltered', 'Filtered')) %>%
+  filter(Ensemble,
+         Pseudo=='Pseudo') %>%
+  ggplot() + aes(fpr,tpr, col=model) +
+  geom_line() + facet_grid(class ~ dataset) + 
+  labs(title='Ensemble Pseudo ROC curves')
+```
+
+```{r}
+df_pr %>%
+  mutate(Ensemble=ifelse(grepl('Ensemble',model) | grepl('Ensemble', condition), TRUE, FALSE),
+         Pseudo=ifelse(grepl('NoPseudo',condition), 'No Pseudo','Pseudo'),
+         LabelType=ifelse(grepl('Unfiltered',condition), 'Unfiltered', 'Filtered')) %>%
+  filter(Ensemble,
+         Pseudo=='Pseudo') %>%
+  ggplot() + aes(Recall,Precision, col=model) +
+  geom_line() + facet_grid(class ~ dataset) + 
+  labs(title='Ensemble Pseudo PR curves')
+```
+
+# No KNN
+
+```{r}
+df_roc %>%
+  mutate(Ensemble=ifelse(grepl('Ensemble',model) | grepl('Ensemble', condition), TRUE, FALSE),
+         Pseudo=ifelse(grepl('NoPseudo',condition), 'No Pseudo','Pseudo'),
+         LabelType=ifelse(grepl('Unfiltered',condition), 'Unfiltered', 'Filtered')) %>%
+  filter(Ensemble,
+         Pseudo=='Pseudo',
+         model != 'KNN') %>%
+  ggplot() + aes(fpr,tpr, col=model) +
+  geom_line() + facet_grid(class ~ dataset) + 
+  labs(title='Ensemble Pseudo ROC curves')
+```
+
+```{r}
+df_pr %>%
+  mutate(Ensemble=ifelse(grepl('Ensemble',model) | grepl('Ensemble', condition), TRUE, FALSE),
+         Pseudo=ifelse(grepl('NoPseudo',condition), 'No Pseudo','Pseudo'),
+         LabelType=ifelse(grepl('Unfiltered',condition), 'Unfiltered', 'Filtered')) %>%
+  filter(Ensemble,
+         Pseudo=='Pseudo',
+         model != 'KNN') %>%
+  ggplot() + aes(Recall,Precision, col=model) +
+  geom_line() + facet_grid(class ~ dataset) + 
+  labs(title='Ensemble Pseudo PR curves')
+```
+
+
+
+
+
