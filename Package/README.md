@@ -7,6 +7,7 @@ This repository contains code for the SnapKin package which may be used to predi
 ## Usage 
 
 To use SnapKin, download this repository and go to the downloaded folder on the commandline (eg. Terminal).
+
 Create an *arguments* text file [(mentioned below)](#Arguments-File) and run using python3 on the commandline.
 
 Example usage with provided example data.
@@ -17,14 +18,33 @@ Example usage with provided example data.
 
 ## Data Format 
 
-The training and test files must be a particular format. 
-TODO - 
+The training and test files must be a particular format as described below.
+
+An example of the format and preprocessing can be found in [Example_Data/Example_Data_Preprocessing.Rmd](./Example_Data/Example_Data_Preprocessing.Rmd).
+
+### Training 
+
+The training dataset must be of the following format:
+
+- site: how each observation will be identified. 
+- phosphoproteomic data 
+- sequence score 
+- y: class labels 
+
+where the phosphoproteomic data and sequence score are normalised using min-max (0-1) normalisation, and the columns *y* and *site* must be included. 
+### Test
+
+The test dataset must be of the following format:
+
+- site: how each observation will be identified.
+- phosphoproteomic data 
+- sequence score
 
 ## Arguments File
 
 The arguments file is used to provide necessary information, such as hyperparamters and file paths, to run SnapKin. 
 
-An example `arguments.txt` file is provided in `Example_Data`. 
+An example `arguments.txt` file is provided in [Example_Data](./Example_Data/arguments.txt). 
 
 The arguments that may be used in the arguments file are the following:
 

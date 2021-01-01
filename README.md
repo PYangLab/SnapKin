@@ -28,3 +28,4 @@ For GPU support, use *environment-gpu.yml* and *activate SnapKin-GPU*.
 
 ## Example 
 
+Documentation of the SnapKin package and example usage can be found in the following [README](./Package/README.md).
