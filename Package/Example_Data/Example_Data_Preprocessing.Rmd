@@ -1,0 +1,142 @@
+---
+title: "Example Data Preprocessing"
+author: "Michael Lin"
+date: "02/01/2021"
+output: html_document
+---
+
+# Dependencies
+
+```{r}
+library(PhosR)
+library(dplyr)
+```
+
+
+# Loading Data
+
+The ESC phosphoproteomic dataset is used.
+
+This dataset contains phosphoproteomic data from mouse liver cells.
+
+Labels are formatted as **gene;site;amino acid sequence;** where **;** is used as delimiters.
+
+```{r}
+load('./Phospho_ESC.RData')
+head(dat)
+```
+
+# Preprocessing
+
+The observation labels (rownames of ESC dataframe), site labels, and sequence information for each observation are stored.
+
+```{r}
+ids = rownames(dat)
+sites <- sapply(strsplit(ids, ";"), function(x)paste(x[1], x[2], "", sep=";"))
+sequences <- sapply(strsplit(ids, ";"), function(x)x[3])
+```
+
+
+# Extracting Kinase Labels from PhosphositePlus
+
+Class labels are retrieved from the PhosphositePlus database using the *PhosR* package.
+Known MTOR (mechanistic target of rapamycin) substrates for mouse cells are extracted below.
+
+```{r}
+# Dataframe index of known substrates for MTOR
+substrate.ids = which(sites %in% PhosR::PhosphoSite.mouse$MTOR)
+y = rep(0, length(sites))
+y[substrate.ids] = 1
+```
+
+
+# Extracting Sequence Information
+
+The motif score is computed based off the substrates and sequence information found above.
+
+```{r}
+seq.score.raw = frequencyScoring(sequences, createFrequencyMat(sequences[substrate.ids]))
+```
+
+# Normalisation
+
+The phosphoproteomic data and sequence score are normalised with min-max normalisation.
+
+```{r}
+phospho = (dat - min(dat))/(max(dat) - min(dat))
+seq.score = (seq.score.raw - min(seq.score.raw))/(max(seq.score.raw) - min(seq.score.raw))
+```
+
+# Training Dataset 
+
+The training dataset has columns of the following format 
+
+- site: how each observation will be identified. In this case, it is gene;site;amino acid sequence;.
+
+- phosphoproteomic data 
+- sequence score 
+- y: class labels 
+
+**Note.** *site* and *y* are specific column names that must be included in the training dataset.
+
+```{r}
+training_df = data.frame(site=ids,
+                         phospho,
+                         seq.score,
+                         y)
+head(training_df)
+```
+
+```{r}
+write.csv(training_df,
+          './Example_ESC_MTOR_train.csv',
+          row.names=FALSE)
+```
+
+
+# Test Dataset 
+
+The test dataset has columns of the following format 
+
+- site: how each observation will be identified. In this case, it is gene;site;amino acid sequence;.
+
+- phosphoproteomic data 
+- sequence score
+
+```{r}
+test_df = data.frame(site=ids,
+                         phospho,
+                         seq.score)
+head(test_df)
+```
+
+```{r}
+write.csv(test_df,
+          './Example_ESC_MTOR_test.csv',
+          row.names=FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
