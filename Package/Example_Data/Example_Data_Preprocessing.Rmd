@@ -105,8 +105,8 @@ The test dataset has columns of the following format
 
 ```{r}
 test_df = data.frame(site=ids,
-                         phospho,
-                         seq.score)
+                     phospho,
+                     seq.score)
 head(test_df)
 ```
 
@@ -116,19 +116,39 @@ write.csv(test_df,
           row.names=FALSE)
 ```
 
+# Raw Dataset 
 
+A *raw dataset* is created here. 
+This dataset is of the form 
 
+- site: observations are labelled with the following format **gene;site;amino acid sequence;**.
+- phosphoproteomic data: from *dat* variable, this is the unnormalised phosphoproteomic data
+- y: binary class labels (0) negative and (1) positive/known substrate
 
+The dataset is used as an example input phosphoproteomic dataset for an automated preprocessing of sequence score and normalisation with a companion R function **preprocessSnapKinTraining** included in this repository in helpers.R.
 
+```{r}
+df = data.frame(site=ids,
+                dat,
+                y)
+write.csv(df,
+          './Example_ESC_Raw.csv',
+          row.names = FALSE)
+```
 
+## Example 
 
+The helper function **preprocessSnapKinTraining** can be used as follows.
 
+```{r}
+source('../helpers.R')
+train.df = preprocessSnapKinTraining(df)
+head(train.df)
 
-
-
-
-
-
+# write.csv(train.df,
+#             './Example_ESC_MTOR_train.csv',
+#             row.names=FALSE)
+```
 
 
 
