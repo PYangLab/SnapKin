@@ -1,4 +1,4 @@
-name: SnapKin
+name: SnapKin-GPU
 channels:
   - conda-forge
   - defaults
@@ -7,4 +7,7 @@ dependencies:
   - numpy
   - pandas
   - pip
-  - tensorflow=2.2.0
+  - cudatoolkit=10.1
+  - cudnn=7.6
+  - nccl=2.4
+  - tensorflow-gpu=2.2.0
