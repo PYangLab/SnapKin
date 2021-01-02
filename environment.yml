@@ -7,4 +7,4 @@ dependencies:
   - numpy
   - pandas
   - pip
-  - tensorflow=2.2.0
+  - tensorflow=2.0.0
