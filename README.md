@@ -10,7 +10,7 @@ SnapKin: Protein phosphorylation site prediction for phosphoproteomic data using
 The following are the dependencies required to run the model 
 
 ```
-    tensorflow = 2.0.0
+    tensorflow = 2.2.0
     numpy >= 1.19.4
     pandas >= 1.1.5
 ```
