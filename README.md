@@ -24,7 +24,9 @@ The following code snippet is for initialising and activating a Conda environmen
         conda activate SnapKin
 
 This installs the necessary dependencies in a new environment and activates it.
-For GPU support, use *environment-gpu.yml* and *activate SnapKin-GPU*.
+
+For GPU support, use *environment-gpu.yml* and *activate SnapKin-GPU*. 
+**Note.** Our method for GPU support is not tested for MacOS, but CPU support is available for MacOS.
 
 ## Example 
 

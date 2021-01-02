@@ -1,46 +1,88 @@
 library(PhosR)
 library(dplyr)
 
-preprocessSnapKinTraining = function(data_file, output_filepath=NULL) {
-    #    data_file       :: dataframe containing phosphoproteomic data and a column of known phosphosites denoted by y
-    #    output_filepath :: string of where the output csv file is saved. 
-    #    Returns a dataframe
-    cols = colnames(data_file)
-    if (length(intersect(cols, c('site','y'))) != 2) {
-        stop('Data file is missing at least one of the following columns: "site", "y"')
+preprocessSnapKin = function(training_set, train_ids=NULL, 
+                             test_set=NULL, test_ids=NULL) {
+    # training_set      :: dataframe containing phosphoproteomic data, 
+    #                     a column of known phosphosites denoted by y, 
+    #                     and site information as rownames.
+    # train_ids         :: array of site informations for the training set. 
+    #                     If not null, replaces training set rownames.
+    # test_set          :: dataframe containing phosphoproteomic data,
+    #                     and site information as rownames. If null, the training 
+    #                     set is used.
+    # test_ids          :: array of site informations for the test set. 
+    #                     If not null, replaces training set rownames.
+    # Returns a list of two dataframes
+    #   training        :: stores the processed training data 
+    #   test            :: stores the processed test data
+    cols = colnames(training_set)
+    if (length(intersect(cols, c('y'))) != 1) {
+        stop('Training set is missing the following column "y"')
+    }
+    
+    # Preprocessing
+    training_set = training_set %>% data.frame() 
+    
+    if (is.null(test_set)) {
+        test_set = training_set %>%
+            select(-y)
+    }
+    else {
+        test_cols = colnames(test_set)
+        if (length(setdiff(cols, test_cols)) != 1) {
+            stop(paste('Training and test set features are mismatching. 
+                       The training set should only have one additional feature, "y",
+                       compared with the test set.'))
+        }
+    }
+    
+    # Check data is numeric
+    if (sum(!unlist(lapply(training_set,is.numeric))) != 0) {
+        stop('Training set should not contain non-numeric data')
+    }
+    if (sum(!unlist(lapply(test_set,is.numeric))) != 0) {
+        stop('Test set should not contain non-numeric data')
     }
     
     # Extract components from dataset
-    ids = data_file %>% pull(site)
-    phospho.raw = data_file %>%
-        select(-site,-y)
-    y = data_file %>% pull(y)
+    ids = if (is.null(train_ids)) rownames(training_set) else train_ids 
+    test_ids = if (is.null(test_ids)) rownames(test_set) else test_ids
+    
+    phospho.raw = training_set %>%
+        select(-y)
+    phospho.raw.test = test_set
+    y = training_set %>% pull(y)
     
     # Extract site and sequence information
-    sites <- sapply(strsplit(ids, ";"), function(x)paste(x[1], x[2], "", sep=";"))
-    sequences <- sapply(strsplit(ids, ";"), function(x)x[3])
+    sequences = sapply(strsplit(ids, ';'), function(x)x[3])
+    sequences.test = sapply(strsplit(test_ids,';'), function(x)x[3])
     substrate.ids = which(y==1)
     
     # Compute sequence score
-    seq.score.raw = frequencyScoring(sequences, createFrequencyMat(sequences[substrate.ids]))
+    freq.mat = createFrequencyMat(sequences[substrate.ids])
+    seq.score.raw = frequencyScoring(sequences, freq.mat)
+    seq.score.raw.test = frequencyScoring(sequences.test, freq.mat)
     
     # Normalisation 
     phospho = (phospho.raw - min(phospho.raw))/(max(phospho.raw) - min(phospho.raw))
+    phospho.test = (phospho.raw.test - min(phospho.raw.test))/(max(phospho.raw.test) - min(phospho.raw.test))
     seq.score = (seq.score.raw - min(seq.score.raw))/(max(seq.score.raw) - min(seq.score.raw))
+    seq.score.test = (seq.score.raw.test - min(seq.score.raw.test))/(max(seq.score.raw.test) - min(seq.score.raw.test))
     
-    # Output dataframe
-    df = data.frame(site=ids,
+    # Output dataframes
+    train_df = data.frame(site=ids,
                     phospho,
-                    seq.score,
+                    score=seq.score,
                     y)
+    test_df = data.frame(site=test_ids,
+                         phospho.test,
+                         score=seq.score.test)
     
-    if (!is.null(output_filepath)) {
-        write.csv(df,
-                  output_filepath,
-                  row.names=FALSE)
-    }
+    output = list(training=train_df,
+                  test=test_df)
     
-    return(df)
+    return(output)
 }
 
 
