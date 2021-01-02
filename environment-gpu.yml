@@ -3,11 +3,11 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python>=3.6
+  - python==3.6.1
   - numpy
   - pandas
-  - pip
   - cudatoolkit=10.1
   - cudnn=7.6
   - nccl=2.4
-  - tensorflow-gpu=2.2.0
+  - pip:
+    - tensorflow-gpu=2.2.0
