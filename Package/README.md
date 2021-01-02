@@ -11,8 +11,9 @@ To use SnapKin, download this repository and go to the downloaded folder on the 
 Create an *arguments* text file [(mentioned below)](#Arguments-File) and run using python3 on the commandline.
 
 Example usage with provided example data.
+Note, point the terminal to the **Python** folder before running the example code.
 
-        python3 SnapKin.py Example_Data/arguments.txt
+    ~/SnapKin/Package/Python $ python3 Trainer.py ../Example_Python/arguments.txt
 
 **Note.** It is recommended to move the data into the downloaded folder when running SnapKin for ease of use such as the `Example_Data` file.
 

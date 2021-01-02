@@ -1,0 +1,191 @@
+---
+title: "SnapKin Workflow in Python"
+author: "Michael Lin"
+date: "03/01/2021"
+output: html_document
+---
+
+```{r}
+library(PhosR)
+```
+
+# Introduction 
+
+In this vignette, we showcase a workflow for using SnapKin with Python directly. 
+The stages of this workflow is summarised as follows:
+
+- Labelling phosphoproteomic dataset 
+- Preprocessing training and test datasets
+- Creating an arguments file 
+- Running on Python
+
+# Load Dataset
+
+For this vignette, we will be using the ESC dataset.
+
+```{r}
+load('../Data/Phospho_ESC.RData')
+head(dat)
+```
+The ESC dataset consists of time-course phosphoproteomic data stored in a matrix *dat*.
+
+# Assign Labels
+
+Since the training set for SnapKin requires labelled data, we begin by identifying 
+known substrates for the kinase MTOR. 
+To do this, we refer to the PhosphositePlus database using the PhosR package.
+
+
+```{r}
+# Identify sites 
+ids = rownames(dat)
+sites = sapply(strsplit(ids, ";"), function(x)paste(x[1], x[2], "", sep=";"))
+
+# Dataframe index of known substrates for MTOR
+substrate.ids = which(sites %in% PhosR::PhosphoSite.mouse$MTOR)
+y = rep(0, length(sites))
+y[substrate.ids] = 1
+```
+
+# SnapKin Training and Test Set
+
+Now that we have binary labels for our dataset, we can construct a dataframe that 
+can be used to train a SnapKin model with the help of some helper functions.
+To begin, we can construct the training set as a dataframe consisting of the 
+phosphoproteomic data and labels denoted by *training_set*.
+Additionally, we may also construct a test set which only contains the 
+phosphoproteomic data denoted by *test_set*.
+
+**Note.** The ids for a site must be of the form **gene;site;amino acid sequence;**.
+
+```{r}
+# Preprocessing datasets 
+training_set = data.frame(dat, y)
+rownames(training_set) = ids 
+
+test_set = data.frame(dat)
+rownames(test_set) = ids
+
+# Import preprocessSnapKin
+source('../R/preprocessSnapKin.R')
+```
+
+
+## SnapKin Preprocessing: preprocessSnapKin
+
+Now that we have our training set (and test set) formatted appropriately, we may 
+use *preprocessSnapKin* in order to construct appropriate dataframes for SnapKin.
+Specifically, this function computes motif scores, normalises the dataset, and 
+includes a *site* column for labelling purposes based off rownames (or set by 
+the user).
+We illustrate the various scenarios where *preprocessSnapKin* may be used.
+
+### Training and Test Set
+
+In this scenario, we have a labelled training set and a test set (refer to the 
+dataframes constructed [above](#SnapKin-Training-Set)).
+*preprocessSnapKin* may be used as follows to create a train and test dataframe 
+for SnapKin.
+
+**Note.** The sequence score for the test dataset is based off the labelled training
+set.
+
+```{r}
+# Compute sequence information and returns a list
+preprocessed_data = preprocessSnapKin(training_set=training_set,
+                                      test_set=test_set)
+# Extract the training and test df
+train_df = preprocessed_data$training
+test_df = preprocessed_data$test
+```
+
+
+Rather than renaming the rownames of your dataframe before using *preprocessSnapKin*, 
+*preprocessSnapKin* may also refer to ids directly.
+
+```{r}
+# Compute sequence information and returns a list
+preprocessed_data = preprocessSnapKin(training_set=training_set,
+                                      training_ids=ids,
+                                      test_set=test_set,
+                                      test_ids=ids)
+# Extract the training and test df
+train_df = preprocessed_data$training
+test_df = preprocessed_data$test
+```
+
+
+### Training Set 
+
+In some cases, we may just be interested in seeing how our model will predict on 
+the training set based off the training set. 
+*preprocessSnapKin* can be used to do this as follows 
+
+```{r}
+# Compute sequence information and returns a list
+preprocessed_data = preprocessSnapKin(training_set=training_set)
+# Extract the training and test df
+train_df = preprocessed_data$training
+test_df = preprocessed_data$test
+```
+
+In this case, the test dataframe is the same as the training dataframe except it 
+doesn't have labels. 
+Similarly, we can refer to ids directly as before 
+
+```{r}
+# Compute sequence information and returns a list
+preprocessed_data = preprocessSnapKin(training_set=training_set,
+                                      training_ids=ids)
+# Extract the training and test df
+train_df = preprocessed_data$training
+test_df = preprocessed_data$test
+```
+
+
+## Saving Datasets
+
+Now that the datasets are in their correct format, we save our datasets as csv 
+files.
+
+```{r}
+write.csv(train_df,
+          '../Example_Python/Example_ESC_MTOR_train.csv',
+          row.names=FALSE)
+write.csv(test_df,
+          '../Example_Python/Example_ESC_MTOR_test.csv',
+          row.names=FALSE)
+```
+
+
+# Arguments File
+
+The arguments file is used to provide necessary information, such as hyperparamters and file paths, to run SnapKin. 
+
+An example `arguments.txt` file is provided in the **Data** directory. 
+
+The arguments that may be used in the arguments file are the following:
+
+    train_fp (required)          :: file path to training csv file
+    test_fp  (required)          :: file path to test csv file (requires site column for labels)
+    save_dir (required)          :: folder path where predictions are saved 
+    save_test_name               :: filename for predictions  (default is prediction.csv)
+    verbose                      :: training output and logging - (0) none, (1) progress bar, (2) full output 
+    num_layers                   :: number of layers in feed forward network 
+    num_snapshots                :: number of snapshots to train 
+    num_epochs                   :: number of epochs for each snapshot 
+    batch_size                   :: the size of each batch during training 
+    learning_rate                :: the maximum learning rate - high learning rates may mean the network won't converge 
+    
+    
+# Running with Python
+
+To run SnapKin with Python, we do the following:
+
+- Open the terminal and move to the Python folder.
+- Activate conda environment **conda activate SnapKin**
+
+- Run Python **python3 Trainer.py ../Example_Python/arguments.txt**
+
+A csv file of the predictions is generated and saved depending on the argument.txt file.
+
