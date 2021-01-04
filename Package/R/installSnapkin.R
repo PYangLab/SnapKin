@@ -1,4 +1,5 @@
-install_snapkin = function(useGPU=FALSE) {
+#' @export
+installSnapkin = function(useGPU=FALSE) {
     # Function for installing conda environment
     if (useGPU) {
         if (Sys.info()["sysname"] == 'Darwin') {

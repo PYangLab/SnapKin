@@ -16,8 +16,8 @@ The following are the dependencies required to run the model
 ```
 ### Useful Packages 
 
-SnapKin can be used in R and an example workflow is included in the [vignettes](./vignettes).
-The following R packages are used in the xample workflow:
+SnapKin can be used in R and an example workflows can be found in the articles.
+The following R packages are used in the example R workflow:
 
 ```
     PhosR        : (sequence information scoring and kinase-substrate labelling)
@@ -48,11 +48,12 @@ A helper function is included to install the appropriate conda environment in R 
 ``` 
     install.packages('r-reticulate')
     source('~/SnapKin/Package/R/install_snapkin.R')
-    install_snapkin(useGPU=FALSE)
+    installSnapkin(useGPU=FALSE)
 ```
 
 For non-MacOS users, Tensorflow-GPU may be installed by using *useGPU=TRUE*.
 
 ## Example 
 
-Documentation of the SnapKin package and example usage can be found in the following [README](./Package/README.md).
+
+

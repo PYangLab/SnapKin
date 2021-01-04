@@ -1,12 +1,21 @@
 ---
 title: "SnapKin Workflow in R"
-author: "Michael Lin"
-date: "02/01/2021"
-output: html_document
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{SnapKin_WorkFlow_R}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
-```{r}
-library(PhosR)
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(SnapKin)
 ```
 
 # Load Dataset
@@ -57,8 +66,6 @@ rownames(training_set) = ids
 
 test_set = data.frame(dat)
 rownames(test_set) = ids
-
-# Import preprocessSnapKin
 source('../R/preprocessSnapKin.R')
 ```
 

@@ -1,12 +1,21 @@
 ---
 title: "SnapKin Workflow in Python"
-author: "Michael Lin"
-date: "03/01/2021"
-output: html_document
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{SnapKin_WorkFlow_Python}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
-```{r}
-library(PhosR)
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(SnapKin)
 ```
 
 # Introduction 
