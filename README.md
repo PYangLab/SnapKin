@@ -10,6 +10,7 @@ SnapKin: Protein phosphorylation site prediction for phosphoproteomic data using
 The following are the dependencies required to run the model 
 
 ```
+    python = 3.8
     tensorflow = 2.2.0
     numpy >= 1.19.4
     pandas >= 1.1.5
@@ -24,6 +25,15 @@ The following R packages are used in the example R workflow:
     r-reticulate : (integrates Python into R)
     dplyr        : (dataframe manipulation)
 ```
+
+**Note.** 
+Please use the development version of `PhosR` on Github by installing using *devtools*
+
+```
+    install.packages('devtools')
+    devtools::install_github("PYangLab/PhosR")
+```
+
 
 ### Conda 
 
@@ -52,8 +62,3 @@ A helper function is included to install the appropriate conda environment in R 
 ```
 
 For non-MacOS users, Tensorflow-GPU may be installed by using *useGPU=TRUE*.
-
-## Example 
-
-
-
