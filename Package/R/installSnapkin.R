@@ -1,3 +1,15 @@
+#' SnapKin Conda Dependencies Installer
+#'
+#' This function installs a Conda environment for SnapKin.
+#'
+#' @param useGPU Boolean specifying whether a GPU-supported environment should
+#' be downloaded. This is not supported for MacOS environments.
+#'
+#' @return NULL
+#' @examples
+#'
+#' installSnapkin()
+#'
 #' @export
 installSnapkin = function(useGPU=FALSE) {
     # Function for installing conda environment

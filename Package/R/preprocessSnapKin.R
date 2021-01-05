@@ -1,32 +1,34 @@
+#' SnapKin Preprocessing Function
+#'
+#' This function preprocesses Phosphoproteomic data so that it may be used for
+#' training a SnapKin model.
+#'
+#' @param training_set PhosphoExperiment Object containing training set. Assays
+#' must contain a 'y' column representing labels.
+#' @param test_set PhosphoExperiment Object containing test set. If NULL, the
+#' training_set is used.
+#' @param train_ids (Optional) Vector of characters to label the train set.
+#' @param test_ids (Optional) Vector of characters to label the test set.
+#'
+#' @return A list of dataframes. training stores the processed training data.
+#' test stores the processed test data.
+#' @examples
 #' @export
-preprocessSnapKin = function(training_set, training_ids=NULL,
-                             test_set=NULL, test_ids=NULL) {
-    # training_set      :: dataframe containing phosphoproteomic data,
-    #                     a column of known phosphosites denoted by y,
-    #                     and site information as rownames.
-    # train_ids         :: array of site informations for the training set.
-    #                     If not null, replaces training set rownames.
-    # test_set          :: dataframe containing phosphoproteomic data,
-    #                     and site information as rownames. If null, the training
-    #                     set is used.
-    # test_ids          :: array of site informations for the test set.
-    #                     If not null, replaces training set rownames.
-    # Returns a list of two dataframes
-    #   training        :: stores the processed training data
-    #   test            :: stores the processed test data
+preprocessSnapKin = function(train, train_ids=NULL, test=NULL, test_ids = NULL) {
+
+    training_set = train@assays@data[[1]] %>% data.frame()
     cols = colnames(training_set)
     if (length(intersect(cols, c('y'))) != 1) {
         stop('Training set is missing the following column "y"')
     }
 
-    # Preprocessing
-    training_set = training_set %>% data.frame()
-
-    if (is.null(test_set)) {
+    if (is.null(test)) {
         test_set = training_set %>%
             dplyr::select(-y)
+        test_ds = train_ids
     }
     else {
+        test_set = test@assays@data[[1]] %>% data.frame()
         test_cols = colnames(test_set)
         if (length(setdiff(cols, test_cols)) != 1) {
             stop(paste('Training and test set features are mismatching.
@@ -43,18 +45,28 @@ preprocessSnapKin = function(training_set, training_ids=NULL,
         stop('Test set should not contain non-numeric data')
     }
 
-    # Extract components from dataset
-    ids = if (is.null(training_ids)) rownames(training_set) else training_ids
-    test_ids = if (is.null(test_ids)) rownames(test_set) else test_ids
+    if (is.null(train_ids)) {
+        train_ids = train@Sequence
+    }
 
+    if (is.null(test_ids)) {
+        if (is.null(test)) {
+            test_ids = train_ids
+        }
+        else {
+            test_ids = test@Sequence
+        }
+    }
+
+    # Extract components from dataset
     phospho.raw = training_set %>%
         dplyr::select(-y)
     phospho.raw.test = test_set
     y = training_set %>% dplyr::pull(y)
 
     # Extract site and sequence information
-    sequences = sapply(strsplit(ids, ';'), function(x)x[3])
-    sequences.test = sapply(strsplit(test_ids,';'), function(x)x[3])
+    sequences = train@Sequence
+    sequences.test = if (is.null(test)) train@Sequence else test@Sequence
     substrate.ids = which(y==1)
 
     # Compute sequence score
@@ -69,7 +81,7 @@ preprocessSnapKin = function(training_set, training_ids=NULL,
     seq.score.test = (seq.score.raw.test - min(seq.score.raw.test))/(max(seq.score.raw.test) - min(seq.score.raw.test))
 
     # Output dataframes
-    train_df = data.frame(site=ids,
+    train_df = data.frame(site=train_ids,
                           phospho,
                           score=seq.score,
                           y)
