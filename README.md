@@ -62,3 +62,5 @@ A helper function is included to install the appropriate conda environment in R 
 ```
 
 For non-MacOS users, Tensorflow-GPU may be installed by using *useGPU=TRUE*.
+
+## Example
