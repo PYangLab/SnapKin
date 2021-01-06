@@ -170,6 +170,23 @@ For the following to work, we assume that you have created the appropriate conda
 environment as mentioned in the Github repository. 
 Our example uses the *SnapKin* conda environment, specifically Tensorflow with CPU.
 
+## Installing Conda Environment 
+
+This step highlights how the appropriate conda environment may be installed using 
+R. 
+The Conda environment installed is called **SnapKin**.
+
+```{r}
+installSnapkin()
+```
+
+
+
+## Activate Conda Environment
+
+We now activate our conda environment, which contains the required dependencies 
+to run SnapKin.
+
 ```{r}
 # Set the conda environment to SnapKin
 reticulate::use_condaenv(condaenv = 'SnapKin', required=TRUE)
@@ -180,6 +197,7 @@ Snapkin = reticulate::import_from_path('SnapKin',path = '../Python/')
 ```
 
 
+
 Since SnapKin takes pandas dataframes as inputs, we convert our training and test 
 datasets into pandas dataframes using *r_to_py*.
 
@@ -188,6 +206,8 @@ datasets into pandas dataframes using *r_to_py*.
 snapkin_train = reticulate::r_to_py(train_df)
 snapkin_test = reticulate::r_to_py(test_df)
 ```
+
+## Predict with SnapKin
 
 Now that the datasets are in the right format, we can run SnapKin using **snapkin**, 
 which is a function implemented in Python. 
