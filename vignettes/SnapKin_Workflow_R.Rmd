@@ -176,18 +176,18 @@ This step highlights how the appropriate conda environment may be installed usin
 R. 
 The Conda environment installed is called **SnapKin**.
 
-```{r}
+```{r eval=FALSE}
 installSnapkin()
 ```
 
-
+**Note.** This step may be skipped if the conda environment has already been installed.
 
 ## Activate Conda Environment
 
 We now activate our conda environment, which contains the required dependencies 
 to run SnapKin.
 
-```{r}
+```{r eval=FALSE}
 # Set the conda environment to SnapKin
 reticulate::use_condaenv(condaenv = 'SnapKin', required=TRUE)
 # reticulate::use_condaenv(condaenv = 'SnapKin-GPU', required=TRUE)
@@ -201,7 +201,7 @@ Snapkin = reticulate::import_from_path('SnapKin',path = '../Python/')
 Since SnapKin takes pandas dataframes as inputs, we convert our training and test 
 datasets into pandas dataframes using *r_to_py*.
 
-```{r}
+```{r eval=FALSE}
 # Convert the train/test dataset to pandas dataframes.
 snapkin_train = reticulate::r_to_py(train_df)
 snapkin_test = reticulate::r_to_py(test_df)
@@ -213,7 +213,7 @@ Now that the datasets are in the right format, we can run SnapKin using **snapki
 which is a function implemented in Python. 
 We can include various arguments as seen below. 
 
-```{r}
+```{r eval=FALSE}
 predictions = Snapkin$snapkin(df_train=snapkin_train,
                               df_test=snapkin_test,
                               verbose=1,
@@ -229,7 +229,7 @@ that can be easily used.
 
 **Note.** A high learning rate may prevents snapshots of SnapKin from converging.
 
-```{r}
+```{r eval=FALSE}
 head(predictions)
 ```
 
