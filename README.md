@@ -57,8 +57,7 @@ A helper function is included to install the appropriate conda environment in R 
 
 ``` 
     install.packages('r-reticulate')
-    source('~/SnapKin/Package/R/install_snapkin.R')
-    installSnapkin(useGPU=FALSE)
+    SnapKin::installSnapkin(useGPU=FALSE)
 ```
 
 For non-MacOS users, Tensorflow-GPU may be installed by using *useGPU=TRUE*.
