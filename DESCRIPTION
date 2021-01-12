@@ -13,8 +13,7 @@ Authors@R: c(
     person(given = "Pengyi",
            family = "Yang",
            role = c("aut"),
-           email = "pengyi.yang@sydney.edu.au",
-           comment = c(ORCID = "0000-0003-1098-3138")))
+           email = "pengyi.yang@sydney.edu.au")))
 Description: Kinase Substrate Prediction with Phosphoproteomic Data using SnapKin.
 License: GPL (>= 3)
 Depends: R (>= 4.0.0)
