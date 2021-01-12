@@ -2,8 +2,6 @@
 
 SnapKin: Protein phosphorylation site prediction for phosphoproteomic data using an ensemble deep learning approach.
 
-## Description
-
 
 ## Requirements
 
@@ -63,3 +61,10 @@ A helper function is included to install the appropriate conda environment in R 
 For non-MacOS users, Tensorflow-GPU may be installed by using *useGPU=TRUE*.
 
 ## Example
+
+Please follow the Python or R work for testing on the example data:
+
+[SnapKin Workflow in Python](https://pyanglab.github.io/SnapKin/articles/SnapKin_WorkFlow_Python.html)
+[SnapKin Workflow in R](https://pyanglab.github.io/SnapKin/articles/SnapKin_Workflow_R.html)
+
+
