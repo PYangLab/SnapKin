@@ -64,7 +64,8 @@ For non-MacOS users, Tensorflow-GPU may be installed by using *useGPU=TRUE*.
 
 Please follow the Python or R work for testing on the example data:
 
-[SnapKin Workflow in Python](https://pyanglab.github.io/SnapKin/articles/SnapKin_WorkFlow_Python.html)
-[SnapKin Workflow in R](https://pyanglab.github.io/SnapKin/articles/SnapKin_Workflow_R.html)
+* [SnapKin Workflow in Python](https://pyanglab.github.io/SnapKin/articles/SnapKin_WorkFlow_Python.html)
+
+* [SnapKin Workflow in R](https://pyanglab.github.io/SnapKin/articles/SnapKin_Workflow_R.html)
 
 
